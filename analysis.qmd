@@ -4,6 +4,12 @@ format: html
 editor: visual
 ---
 
+## To-do list
+
+-   [ ] Harmonise the pilot
+
+-   [ ] 
+
 ## Setup
 
 ```{r libs}
@@ -15,6 +21,7 @@ library(sjmisc)
 ## Loading in data
 
 ```{r}
+# insert your own file names for the datasets here
 round1 <- read_dta(file.path("data", "ggp", "round1.dta"))
 round2 <- read_dta(file.path("data", "ggp", "round2.dta"))
 pilot <- read_dta(file.path("data", "ggp", "pilot.dta"))
@@ -29,7 +36,7 @@ round1tidy <- round1 |>
   
   mutate(
     parstat = case_when(
-      aparstat == 1 & (amarstat == 1 | amarstat == 3 | amarstat == 4) ~ 1, # cohabting
+      aparstat == 1 & (amarstat == 1 | amarstat == 3 | amarstat == 4) ~ 1, # cohabiting
       aparstat == 1 & (amarstat == 2) ~ 2, # married
       aparstat == 2 ~ 3, # LAT
       aparstat == 3 ~ 4, # single
@@ -104,7 +111,8 @@ round2tidy <- round2 |>
       dem06 == 7 ~ 9,
       dem06 == 12 ~ 10,
       TRUE ~ NA
-    )
+    ),
+
   ) |> 
   rename(
     a301m = dem30bm,
@@ -126,7 +134,7 @@ round2tidy <- round2 |>
   )
 ```
 
-## Appending them
+## Appending
 
 ```{r}
 analysis <- add_rows(round1tidy, round2tidy, id = "survey")
@@ -145,17 +153,30 @@ Key variables in construction of typology
 ```{r}
 analysis <- analysis |> 
   mutate(
+    
+    # scales were reversed between waves, 2005 has them going from agree to disagree, this construction is based on the opposite
+    
+    att03afix = if_else(survey == 1, 6 - att03a, att03a),
+    
     att = case_when(
-      att03a == 4 | att03a == 5 ~ 1, # agree
-      att03a == 1 | att03a == 2 ~ 2, # disagree
-      att03a == 3 ~ 3, # indifferent
+      att03afix == 4 | att03afix == 5 ~ 1, # agree
+      att03afix == 1 | att03afix == 2 ~ 2, # disagree
+      att03afix == 3 ~ 3, # indifferent
       TRUE ~ NA
     ),
+    
+    # Have to fix dem28c because they have inconsistent scales (2021 version has an unsure as value 3), I'm fixing it by adding 1 responses 3 and 4 in the 2005 version
+    
+    dem28cfix = if_else(survey == 1 & dem28c > 2, dem28c + 1, dem28c),
+    
     int3 = case_when(
-      dem28c == 4 | dem28c == 5 ~ 1, # yes
-      dem28c == 1 | dem28c == 2 | dem28c == 3 ~ 0, # no
+      dem28cfix == 4 | dem28cfix == 5 ~ 1, # yes
+      dem28cfix == 1 | dem28cfix == 2 | dem28cfix == 3 ~ 0, # no
       TRUE ~ NA
     ),
+    
+    # scales here are consistent
+    
     econ = case_when(
       inc03 == 1 | inc03 == 2 ~ 1, # yes
       inc03 == 3 | inc03 == 4 | inc03 == 5 | inc03 == 6 ~ 0, # no
@@ -211,8 +232,18 @@ analysis <- analysis |>
 
 ```{r}
 analysis_sample <- analysis |> 
-  filter(age4 < 4 & parstat == 1 & cores == 1 & !(is.na(edu3)) & !(is.na(typ))) 
+  filter(age4 < 4 & parstat == 1 & !(is.na(edu3)) & !(is.na(typ))) 
 # not missing on typology, education or partnership status. Cohabitant and under the age of 71, 
 
-figure4 <- 
+figure4 <- analysis_sample |> 
+  summarise(
+    weight = sum(weight),
+    .by = c("survey", "typ")
+  ) |> 
+  mutate(
+    total_weight = sum(weight), .by = survey
+  ) |> 
+  mutate(
+    prop = weight/total_weight
+  )
 ```
