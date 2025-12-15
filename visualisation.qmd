@@ -14,7 +14,7 @@ date: "2025-07-31"
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-# Setup
+## Setup
 
 ```{r libs}
 library(tidyverse)
@@ -38,7 +38,8 @@ figure4 <- read_csv("data/figure4.csv") |>
                names_to = "year",
                values_to = "percentage") |> 
   mutate(year = str_extract(year, "\\d{4}")) 
-  
+
+# computing some aggregated statistics
 figure4 <- figure4 |>   
   left_join(
     figure4 |>  
@@ -58,8 +59,6 @@ figure4 <- figure4 |>
 figure5 <- read_csv("data/figure5.csv") |>  
   select(-any_of("...5")) |> 
   drop_na() |> 
-  
-  # find max
   group_by(response, age_group) |>  
   mutate(max=max(year_2005, year_2021)) |>  
   ungroup() |>  
@@ -73,8 +72,6 @@ figure5 <- read_csv("data/figure5.csv") |>
 figure6 <- read_csv("data/figure6.csv") |>  
   select(-any_of("...5")) |> 
   drop_na() |> 
-  
-  # find max
   group_by(response, type) |>  
   mutate(max=max(year_2005, year_2021)) |>  
   ungroup() |>  
