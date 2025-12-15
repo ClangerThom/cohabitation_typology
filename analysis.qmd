@@ -1,0 +1,218 @@
+---
+title: "analysis"
+format: html
+editor: visual
+---
+
+## Setup
+
+```{r libs}
+library(tidyverse)
+library(haven)
+library(sjmisc)
+```
+
+## Loading in data
+
+```{r}
+round1 <- read_dta(file.path("data", "ggp", "round1.dta"))
+round2 <- read_dta(file.path("data", "ggp", "round2.dta"))
+pilot <- read_dta(file.path("data", "ggp", "pilot.dta"))
+pilot_followup <- read_dta(file.path("data", "ggp", "pilot_followup.dta"))
+```
+
+## Tidy round 1
+
+```{r}
+round1tidy <- round1 |> 
+  select(aparstat, amarstat, a1107_a, a332, a1002, a301m, a301y, a302bm, a302by, a148, a308, asex, a384, abyear, a373m, a373y, aactstat, arid, acountry, amonth, ayear, aweight) |>
+  
+  mutate(
+    parstat = case_when(
+      aparstat == 1 & (amarstat == 1 | amarstat == 3 | amarstat == 4) ~ 1, # cohabting
+      aparstat == 1 & (amarstat == 2) ~ 2, # married
+      aparstat == 2 ~ 3, # LAT
+      aparstat == 3 ~ 4, # single
+      TRUE ~ NA
+    )
+  ) |> 
+  
+  # harmonize variable names with later waves
+  rename(
+    att03a = a1107_a,
+    dem28c = a332,
+    inc03 = a1002,
+    edu = a148,
+    edup = a308,
+    sex = asex,
+    sexp = a384,
+    birthy = abyear,
+    birthpm = a373m,
+    birthpy = a373y,
+    activ = aactstat,
+    weight = aweight
+  )
+```
+
+## Tidy round 2
+
+```{r}
+round2tidy <- round2 |> 
+  select(
+    dem21, dem28a, dem30a, dem28c, att03a, inc03, dem30bm, dem30by, dem28bm, dem28by, dem33, dem07, dem25, dem01, dem23, dem02m, dem02y, dem22m, dem22y, dem06, respid, country, mode, intdatem, intdatey, weight
+  ) |> 
+  mutate(
+    parstat = case_when(
+      dem21 == 1 & dem28a == 2 & dem30a == 1 ~ 1, # cohabiting
+      dem21 == 1 & dem28a == 1 ~ 2, # married
+      dem21 == 1 & dem28a == 2 & dem30a == 2 ~ 3, # LAT
+      dem21 == 2 ~ 4, # single
+      TRUE ~ NA
+    ),
+    dem07 = case_when(
+      dem07 == 1 ~ 2,
+      dem07 == 2 ~ 2,
+      dem07 == 3 ~ 3,
+      dem07 == 4 ~ 4,
+      dem07 == 5 ~ 5,
+      dem07 == 6 ~ 5,
+      dem07 == 7 ~ 6,
+      dem07 == 8 ~ 6,
+      TRUE ~ NA
+    ),
+    dem25 = case_when(
+      dem25 == 1 ~ 2,
+      dem25 == 2 ~ 2,
+      dem25 == 3 ~ 3,
+      dem25 == 4 ~ 4,
+      dem25 == 5 ~ 5,
+      dem25 == 6 ~ 5,
+      dem25 == 7 ~ 6,
+      dem25 == 8 ~ 6,
+      TRUE ~ NA
+    ),
+    dem06 = case_when(
+      dem06 == 2 ~ 1,
+      dem06 == 3 ~ 1,
+      dem06 == 4 ~ 2,
+      dem06 == 5 ~ 3,
+      dem06 == 1 ~ 4,
+      dem06 == 6 ~ 5,
+      dem06 == 9 ~ 6,
+      dem06 == 10 ~ 6,
+      dem06 == 11 ~ 7,
+      dem06 == 7 ~ 9,
+      dem06 == 12 ~ 10,
+      TRUE ~ NA
+    )
+  ) |> 
+  rename(
+    a301m = dem30bm,
+    a301y = dem30by,
+    a302bm = dem28bm,
+    a302by = dem28by,
+    edu = dem07,
+    edup = dem25,
+    sex = dem01,
+    sexp = dem23,
+    birthm = dem02m,
+    birthy = dem02y,
+    birthpm = dem22m,
+    birthpy = dem22y,
+    activ = dem06,
+    acountry = country,
+    amonth = intdatem,
+    ayear = intdatey
+  )
+```
+
+## Appending them
+
+```{r}
+analysis <- add_rows(round1tidy, round2tidy, id = "survey")
+```
+
+## Creation of typology
+
+Key variables in construction of typology
+
+-   att - marriage is outdated
+
+-   int3 - plans to marry within 3 years
+
+-   econ - HH able to make ends meet
+
+```{r}
+analysis <- analysis |> 
+  mutate(
+    att = case_when(
+      att03a == 4 | att03a == 5 ~ 1, # agree
+      att03a == 1 | att03a == 2 ~ 2, # disagree
+      att03a == 3 ~ 3, # indifferent
+      TRUE ~ NA
+    ),
+    int3 = case_when(
+      dem28c == 4 | dem28c == 5 ~ 1, # yes
+      dem28c == 1 | dem28c == 2 | dem28c == 3 ~ 0, # no
+      TRUE ~ NA
+    ),
+    econ = case_when(
+      inc03 == 1 | inc03 == 2 ~ 1, # yes
+      inc03 == 3 | inc03 == 4 | inc03 == 5 | inc03 == 6 ~ 0, # no
+      TRUE ~ NA
+    ),
+    
+    # dichotomise the partnership status variable
+    cohab = if_else(parstat == 1, 1, 0),
+    cores = if_else(parstat == 1 | parstat == 2, 1, 0),
+    relat = if_else(parstat == 1 | parstat == 2 | parstat == 3, 1, 0),
+    
+    # some more convenience recodes
+    edu3 = case_when(
+      edu == 2 ~ "low",
+      edu %in% c(3, 4) ~ "mid",
+      edu %in% c(5, 6, 7, 8) ~ "high",
+      is.na(edu) ~ "unknown",
+      TRUE ~ NA_character_
+    ),
+    
+    age = ayear-birthy,
+    
+    age3 = case_when(
+      age >= 18 & age <= 31 ~ "18-31",
+      age >= 32 & age <= 45 ~ "32-45",
+      age >= 46 & age <= 59 ~ "46-59",
+      TRUE ~ NA_character_
+    ),
+    
+    age4 = case_when(
+      age >= 18 & age <= 34 ~ "18-34",
+      age >= 35 & age <= 51 ~ "35-51",
+      age >= 52 & age <= 70 ~ "52-70",
+      age >= 71 ~ "70+",
+      TRUE ~ NA_character_
+    ),
+    
+    # the typology itself
+    typ = case_when(
+      cohab==1 & int3==1 & att==2 ~ "Prelude",
+      cohab==1 & int3==0 & att==2 & econ==0 ~ "Trial",
+      cohab==1 & int3==0 & att==2 & econ==1 ~ "Economic",
+      cohab==1 & int3==1 & att==1 ~ "Conformist",
+      cohab==1 & int3==1 & att==3 ~ "Conformist",
+      cohab==1 & int3==0 & att==1 ~ "Refusal",
+      cohab==1 & int3==0 & att==3 ~ "Irrelevant",
+      TRUE ~ NA
+    )
+  )
+```
+
+## Analysis of typologies
+
+```{r}
+analysis_sample <- analysis |> 
+  filter(age4 < 4 & parstat == 1 & cores == 1 & !(is.na(edu3)) & !(is.na(typ))) 
+# not missing on typology, education or partnership status. Cohabitant and under the age of 71, 
+
+figure4 <- 
+```
