@@ -8,11 +8,13 @@ editor: visual
 
 -   [ ] Harmonise the pilot
 
--   [ ] 
+## Inconsistencies?
+
+-   Why age under 60?
 
 ## Setup
 
-```{r libs}
+```{r libs message=FALSE}
 library(tidyverse)
 library(haven)
 library(sjmisc)
@@ -136,7 +138,7 @@ round2tidy <- round2 |>
 
 ## Appending
 
-```{r}
+```{r message=FALSE}
 analysis <- add_rows(round1tidy, round2tidy, id = "survey")
 ```
 
@@ -232,8 +234,8 @@ analysis <- analysis |>
 
 ```{r}
 analysis_sample <- analysis |> 
-  filter(age4 < 4 & parstat == 1 & !(is.na(edu3)) & !(is.na(typ))) 
-# not missing on typology, education or partnership status. Cohabitant and under the age of 71, 
+  filter(age < 60 & parstat == 1 & !(is.na(edu3)) & edu3 != "unknown" & !(is.na(typ))) 
+# not missing on typology, education or partnership status. Cohabitant and under the age of 60, 
 
 figure4 <- analysis_sample |> 
   summarise(
@@ -246,4 +248,30 @@ figure4 <- analysis_sample |>
   mutate(
     prop = weight/total_weight
   )
+
+figure5 <- analysis_sample |> 
+  summarise(
+    weight = sum(weight),
+    .by = c("survey", "age3" , "typ")
+  ) |> 
+  mutate(
+    total_weight = sum(weight), .by = c("survey", "age3")
+  ) |> 
+  mutate(
+    prop = weight/total_weight
+  ) |> 
+  arrange(survey, typ, age3)
+
+figure6 <- analysis_sample |> 
+  summarise(
+    weight = sum(weight),
+    .by = c("survey", "edu3" , "typ")
+  ) |> 
+  mutate(
+    total_weight = sum(weight), .by = c("survey", "edu3")
+  ) |> 
+  mutate(
+    prop = weight/total_weight
+  ) |> 
+  arrange(survey, typ, edu3)
 ```
