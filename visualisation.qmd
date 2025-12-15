@@ -1,0 +1,590 @@
+---
+title: "visualisation"
+format: html
+editor: visual
+---
+
+---
+title: "figures_script"
+output: html_document
+date: "2025-07-31"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Setup
+
+```{r libs}
+library(tidyverse)
+library(extrafont)
+library(janitor)
+library(patchwork)
+library(ggrepel)
+```
+
+## Importing data
+
+```{r}
+figure4 <- read_csv("data/figure4.csv") |>
+  select(-any_of("...5")) |> 
+  drop_na() |> 
+  group_by(response) |>  
+  mutate(max=max(year_2005, year_2021)) |>  
+  ungroup() |>  
+  mutate(pp_change = year_2021 - year_2005) |>  
+  pivot_longer(cols = c(year_2005, year_2021),
+               names_to = "year",
+               values_to = "percentage") |> 
+  mutate(year = str_extract(year, "\\d{4}")) 
+  
+figure4 <- figure4 |>   
+  left_join(
+    figure4 |>  
+      group_by(type, year) |>  
+      summarise(percentage_type = sum(percentage)) |> 
+      pivot_wider(id_cols = type, names_from = year, values_from = percentage_type) |> 
+      mutate(pp_change_type = `2021` - `2005`) |>  
+      
+      # find max type
+      group_by(type) |>  
+      mutate(max_type=max(`2021`, `2005`)) |>  
+      ungroup() |>  
+      
+      pivot_longer(cols  = c(`2021`, `2005`), names_to = "year", values_to = "percentage_type")
+    ,by = join_by("type", "year"))
+
+figure5 <- read_csv("data/figure5.csv") |>  
+  select(-any_of("...5")) |> 
+  drop_na() |> 
+  
+  # find max
+  group_by(response, age_group) |>  
+  mutate(max=max(year_2005, year_2021)) |>  
+  ungroup() |>  
+  
+  mutate(pp_change = year_2021 - year_2005) |>  
+  pivot_longer(cols = c(year_2005, year_2021),
+             names_to = "year",
+             values_to = "percentage") |> 
+  mutate(year = str_extract(year, "\\d{4}"))
+
+figure6 <- read_csv("data/figure6.csv") |>  
+  select(-any_of("...5")) |> 
+  drop_na() |> 
+  
+  # find max
+  group_by(response, type) |>  
+  mutate(max=max(year_2005, year_2021)) |>  
+  ungroup() |>  
+  
+  mutate(pp_change = year_2021 - year_2005) |>  
+  pivot_longer(cols = c(year_2005, year_2021),
+             names_to = "year",
+             values_to = "percentage") |> 
+  mutate(year = str_extract(year, "\\d{4}"))
+```
+
+## Theme for figures
+
+```{r}
+#load in fonts
+loadfonts(device = "win")
+
+# Custom ggplot theme to make pretty plots
+# Get the font at https://fonts.google.com/specimen/Jost
+theme_nice <- function() {
+  theme_minimal(base_family = "Jost") +
+    theme(panel.grid.minor = element_blank(),
+          panel.grid.major.x = element_blank(),
+          plot.title = element_text(family = "Jost", face = "bold"),
+          axis.title = element_text(family = "Jost Medium"),
+          axis.title.x = element_text(hjust = 0),
+          axis.title.y = element_text(hjust = 1),
+          strip.text = element_text(family = "Jost", face = "bold",
+                                    size = rel(0.75), hjust = 0),
+          strip.background = element_rect(fill = "grey90", color = NA))
+}
+
+# Set default theme and font stuff
+theme_set(theme_nice())
+update_geom_defaults("text", list(family = "Jost", fontface = "plain"))
+update_geom_defaults("label", list(family = "Jost", fontface = "plain"))
+```
+
+# Making the figures proper:
+
+## Figure 4 - by year with aggregation to larger cohabitation types
+
+### Base plot
+
+```{r}
+# set a custom nudge value
+nudge_value=.75
+
+figure_4 <- 
+  figure4 |> 
+  # reordering levels for plotting
+  mutate(type = factor(type, levels = c("Forerunners - most likely getting married",
+                                         "Forerunners - possibly getting married",
+                                         "Alternatives - unlikely to get married"))) |>  
+                                         
+  
+  # basic mapping and aesthetics
+  ggplot(aes(x = percentage, y = response)) +
+  
+  # Replace geom_line with geom_segment with arrows
+  # Arrows for increases (2005 -> 2021)
+  # Arrow shaft (line only)
+  geom_segment(data = . |>  
+                 group_by(type, response) |>  
+                 arrange(year) |> 
+                 summarise(x_start = first(percentage), 
+                           x_end = last(percentage),
+                           change = x_end - x_start,
+                           .groups = "drop"),
+               aes(x = x_start, xend = x_end, y = response, yend = response),
+               color = "#E7E7E7",
+               linewidth = 3.5) +
+
+  # Arrowhead only (no transparency)
+  geom_segment(data = . |>  
+                 group_by(type, response) |>  
+                 arrange(year) |> 
+                 summarise(x_start = first(percentage), 
+                           x_end = last(percentage),
+                           change = x_end - x_start,
+                           # Start arrow closer to the end to avoid overlap
+                           x_arrow_start = x_end - (x_end - x_start) * 0.05,
+                           .groups = "drop"),
+               aes(x = x_arrow_start, xend = x_end, y = response, yend = response),
+               color = "#E7E7E7",
+               linewidth = 3.5,
+               arrow = arrow(length = unit(0.4, "cm"), type = "closed", angle = 25)) +
+  
+  # adding points
+  geom_point(aes(color = year, shape = year), size=3) +
+  # shape control
+  scale_shape_manual(values = c("2005" = 15,     # filled square
+                              "2021" = 16)) +  # filled circle
+  
+  
+  # adding data points
+  geom_text(aes(label=percentage, color=year),
+            size=3.25,
+            nudge_x=if_else(
+              figure4$percentage==figure4$max, # if it's the larger percentage...
+              nudge_value,   # move it to the right of the point
+              -nudge_value), # otherwise, move it to the left of the point
+            hjust=if_else(
+              figure4$percentage==figure4$max, #if it's the larger percentage
+              0, # left justify
+              1),# otherwise, right justify      
+            ) +
+  
+  # legend
+  geom_text(aes(label = year, color = year), 
+            data=. |>  filter(response == "Prelude to marriage"),
+            nudge_y =.25, 
+            fontface="bold",
+            size=3.25)+ 
+  
+  # control over year colours:
+  scale_color_manual(values=c("#436685", "#BF2F24")) +
+  
+  # control over the scale
+  scale_x_continuous(breaks = seq(0, 35, 10), expand = expansion(mult = c(0.1, 0.2))) +
+  
+  # facet by type
+  facet_wrap(vars(type), nrow = 3, scales = "free_y") +
+  
+  # labels
+  labs( 
+    y = NULL,
+    x = NULL,
+    color = "Year"
+  ) + 
+  
+  # theme control:
+  theme_nice() +
+  theme(legend.position = "none") 
+  
+
+figure_4
+
+ggsave(
+  filename = file.path("plots", "figure_4.png"),
+  plot = figure_4,
+  width = 4.9,
+  height = 5.5,     # use closer to max since you have 3 rows
+  units = "in",
+  dpi = 300,
+  bg = "white"
+)
+```
+
+### numbers on the side
+
+```{r}
+p_gap <- 
+  
+  # controlling the order of facets
+  figure4 |> 
+  mutate(type = factor(type, levels = c("Forerunners - most likely getting married",
+                                         "Forerunners - possibly getting married",
+                                         "Alternatives - unlikely to get married"))) |> 
+  group_by(type, response) |>  
+  summarise(pp_change = max(pp_change), .groups = "drop") |>  
+  
+  # basic mapping and aesthetics
+  ggplot(aes(x=pp_change, y=response)) +
+  geom_text(aes(x=0, label=pp_change),
+            fontface="bold",
+            size=3.25) +
+  
+  # facet by type
+  facet_wrap(vars(type), nrow = 3, scales = "free_y") +
+  
+  # add title
+  labs(title = "PP change\n2021-2005") +
+  
+  theme_void() +
+  coord_cartesian(xlim = c(-.05, 0.05)) +
+  theme(
+    plot.margin = margin(l=0, r=0, b=0, t=50),
+    plot.background = element_rect(fill="#EFEFE3", color="#EFEFE3"),
+    legend.position = "none",
+    strip.text = element_blank(),
+    plot.title = element_text(hjust = 0.5, size = 9, face = "bold", margin = margin(b=5))
+  )
+
+p_whole <- 
+  figure_4 + p_gap + plot_layout(design=
+  c(
+    area(l=0,  r=45, t=0, b=1),
+    area(l=46, r=52, t=0, b=1)
+  )) 
+
+p_whole
+
+ggsave(
+  filename = file.path("plots", "figure_4.png"),
+  plot = p_whole,
+  width = 4.9,
+  height = 5.5,     # use closer to max since you have 3 rows
+  units = "in",
+  dpi = 300,
+  bg = "white"
+)
+```
+
+### aggregated figure 4a
+
+```{r}
+nudge_value=1
+
+figure4_aggr <- 
+  figure4 |>  
+  group_by(type, year) |>  
+  summarise(pp_change = max(pp_change_type),
+            max = max(max_type),
+            percentage = max(percentage_type))
+
+figure_4a <- 
+  figure4_aggr |>  
+  mutate(type = factor(type, levels = c("Alternatives - unlikely to get married",
+                                         "Forerunners - possibly getting married",
+                                         "Forerunners - most likely getting married"))) |>  
+  # plotting
+  ggplot(aes(x = percentage, y = type)) +
+  # Replace geom_line with geom_segment with arrows
+  geom_segment(data = . |>  
+                 group_by(type) |>  
+                 arrange(year) |> 
+                 summarise(x_start = first(percentage), 
+                           x_end = last(percentage),
+                           .groups = "drop"),
+               aes(x = x_start, xend = x_end, y = type, yend = type),
+               color = "#E7E7E7",
+               linewidth = 3.5,
+               arrow = arrow(length = unit(0.5, "cm"), type = "closed", angle = 25)) +
+  
+  geom_point(aes(color=year, shape = year), size=3) +
+  # shape control
+  scale_shape_manual(values = c("2005" = 15,     # filled square
+                              "2021" = 16)) +  # filled circle
+
+  
+  # adding data points
+  geom_text(aes(label=percentage, color=year),
+            size=3.25,
+            nudge_x=if_else(
+              figure4_aggr$percentage==figure4_aggr$max,
+              nudge_value,
+              -nudge_value),
+            hjust=if_else(
+              figure4_aggr$percentage==figure4_aggr$max,
+              0,
+              1)) +
+  
+  # legend
+  geom_text(aes(label = year, color = year), 
+            data=. |>  filter(type == "Forerunners - most likely getting married"),
+            nudge_y =.25, 
+            fontface="bold",
+            size=3.25)+ 
+  
+  # control over year colours:
+  scale_color_manual(values=c("#436685", "#BF2F24")) +
+  
+  # add line breaks to y-axis labels
+  scale_y_discrete(labels = c("Alternatives - unlikely\nto get married",
+                               "Forerunners - possibly\ngetting married",
+                               "Forerunners - most likely\ngetting married")) +
+  # changing the x scale
+  scale_x_continuous(breaks = seq(0, 50, 10)) +
+  coord_cartesian(xlim = c(20, 50)) +
+  
+  # labels
+  labs(
+    y = NULL,
+    x = NULL,
+    color = "Year"
+  ) +
+  
+  # theme control:
+  theme_nice() +
+  theme(legend.position = "none")
+
+
+figure_4a
+
+ggsave(
+  filename = file.path("plots", "figure_4a.png"),
+  plot = figure_4a,
+  width = 4.9,
+  height = 3,       # shorter since it's just 3 rows
+  units = "in",
+  dpi = 300,
+  bg = "white"
+)
+```
+
+### numbers on the side 2
+
+```{r}
+p_gap_4a <- 
+  
+  # controlling the order of facets
+  figure4_aggr |>  
+  mutate(type = factor(type, levels = c("Alternatives - unlikely to get married",
+                                         "Forerunners - possibly getting married",
+                                         "Forerunners - most likely getting married"))) |> 
+  
+  # basic mapping and aesthetics
+  ggplot(aes(x=pp_change, y=type)) +
+  geom_text(aes(x=0, label=pp_change),
+            fontface="bold",
+            size=3.25) +
+  
+  # add title
+  labs(title = "PP change\n2021-2005") +
+  
+  theme_void() +
+  coord_cartesian(xlim = c(-.05, 0.05)) +
+  theme(
+    plot.margin = margin(l=0, r=0, b=0, t=50),
+    plot.background = element_rect(fill="#EFEFE3", color="#EFEFE3"),
+    legend.position = "none",
+    strip.text = element_blank(),
+    plot.title = element_text(hjust = 0.5, size = 9, face = "bold", margin = margin(b=5))
+  )
+
+p_whole_4a <- 
+  figure_4a + p_gap_4a + plot_layout(design=
+  c(
+    area(l=0,  r=45, t=0, b=1),
+    area(l=46, r=52, t=0, b=1)
+  )) 
+
+p_whole_4a
+
+ggsave(
+  filename = file.path("plots", "figure_4_aggr.png"),
+  plot = p_whole_4a,
+  width = 4.9,
+  height = 3, 
+  units = "in",
+  dpi = 300,
+  bg = "white"
+)
+```
+
+## Figure 5 - by generation
+
+```{r}
+# set a custom nudge value
+nudge_value=.3
+
+figure_5 <- 
+  figure5 |>  
+  # Reordering the response vars
+  mutate(
+    response = factor(response,
+                     levels = c("Prelude", 
+                                "Trial",
+                                "Refusal",
+                                "Conformist", 
+                                "Economic", 
+                                "Irrelevant"),
+                     labels = c("Prelude to marriage",
+                                "Trial marriage",
+                                "Refusal",
+                                "Conformist", 
+                                "Economic reasons", 
+                                "Marriage is irrelevant"))
+  ) |>  
+  
+  # basic setup
+  ggplot(aes(x = year, y = percentage, color = age_group, group = age_group, linetype = age_group, shape = age_group)) +
+  geom_line() +
+  # controlling linetype
+  scale_linetype_manual(values = c("18-34" = "solid", 
+                                  "35-51" = "dashed", 
+                                  "52-69" = "dotted")) +
+
+  geom_point() + 
+  
+  # text variable
+  ggrepel::geom_text_repel(
+    aes(label = percentage),
+    size = 3.25,
+    direction = "both",  # or "x" for horizontal only, "y" for vertical only
+    box.padding = 0.35,  # adjust spacing around text
+    point.padding = 0.5, # distance from points
+    segment.size = 0.2,  # line thickness
+    segment.alpha = 0.5, # line transparency
+    min.segment.length = 0.1, # shorter segments
+    force = 0.3,         # repulsion force
+    max.iter = 3000,     # more iterations for better placement
+    nudge_x = if_else(
+      figure5$year == min(figure5$year), 
+      -0.3, 0.3
+    ), show.legend = FALSE) +
+  
+  
+  facet_wrap(vars(response)) +
+  
+  #labs
+  labs(
+    x = NULL,
+    y = NULL,
+    color = "Age group",
+    linetype = "Age group",
+    shape = "Age group"
+  ) +
+  
+  # themes
+  theme_nice() +
+  theme(legend.position = "bottom")
+
+figure_5
+
+ggsave(
+  filename = file.path("plots", "figure_5.png"),
+  plot = figure_5,
+  width = 4.9,
+  height = 5.7,     # use full height for grid layout
+  units = "in",
+  dpi = 300,
+  bg = "white"
+)
+```
+
+## Figure 6 - by education
+
+```{r}
+# set a custom nudge value
+nudge_value=.3
+
+figure_6 <- 
+  figure6 |>  
+  # Reordering the response vars
+  mutate(
+    response = factor(response,
+                     levels = c("Prelude", 
+                                "Trial",
+                                "Refusal",
+                                "Conformist", 
+                                "Economic", 
+                                "Irrelevant"),
+                     labels = c("Prelude to marriage",
+                                "Trial marriage",
+                                "Refusal",
+                                "Conformist", 
+                                "Economic reasons", 
+                                "Marriage is irrelevant")),
+    type = factor(type,
+                  levels = c("Low",
+                             "Medium",
+                             "High"))
+  ) |>  
+  
+  # basic setup
+  ggplot(aes(x = year, y = percentage, color = type, group = type, linetype = type, shape = type)) +
+  geom_line() +
+  # controlling linetype
+  scale_linetype_manual(values = c("Low" = "solid", 
+                                  "Medium" = "dashed", 
+                                  "High" = "dotted")) +
+  geom_point() + 
+  
+  # text variable
+  ggrepel::geom_text_repel(
+    aes(label = percentage),
+    size = 3.25,
+    direction = "both",  # or "x" for horizontal only, "y" for vertical only
+    box.padding = 0.35,  # adjust spacing around text
+    point.padding = 0.5, # distance from points
+    segment.size = 0.2,  # line thickness
+    segment.alpha = 0.5, # line transparency
+    min.segment.length = 0.1, # shorter segments
+    force = 0.3,         # repulsion force
+    max.iter = 3000,     # more iterations for better placement
+    nudge_x = if_else(
+      figure5$year == min(figure5$year), 
+      -0.3, 0.3
+    ), show.legend = FALSE) +
+  
+  # scale fix
+  scale_y_continuous(breaks = seq(0, 40, 10)) +
+  coord_cartesian(ylim = c(0, 40)) +
+  
+  facet_wrap(vars(response)) +
+  
+  #labs
+  labs(
+    x = NULL,
+    y = NULL,
+    color = "Education",
+    linetype = "Education",
+    shape = "Education"
+  ) +
+  
+  # themes
+  theme_nice() +
+  theme(legend.position = "bottom")
+
+figure_6
+
+ggsave(
+  filename = file.path("plots", "figure_6.png"),
+  plot = figure_6,
+  width = 4.9,
+  height = 5.7,     # use full height for grid layout
+  units = "in",
+  dpi = 300,
+  bg = "white"
+)
+```
