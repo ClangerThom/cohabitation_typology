@@ -26,66 +26,66 @@ library(ggrepel)
 
 ## Importing data
 
-```{r}
-figure4 <- read_csv("data/figure4.csv") |>
-  select(-any_of("...5")) |> 
-  drop_na() |> 
-  group_by(response) |>  
-  mutate(max=max(year_2005, year_2021)) |>  
-  ungroup() |>  
-  mutate(pp_change = year_2021 - year_2005) |>  
+```{r message=FALSE}
+figure4 <- read_csv("data/figure4.csv") %>%
+  select(-any_of("...5")) %>% 
+  drop_na() %>% 
+  group_by(response) %>%  
+  mutate(max=max(year_2005, year_2021)) %>%  
+  ungroup() %>%  
+  mutate(pp_change = year_2021 - year_2005) %>%  
   pivot_longer(cols = c(year_2005, year_2021),
                names_to = "year",
-               values_to = "percentage") |> 
+               values_to = "percentage") %>% 
   mutate(year = str_extract(year, "\\d{4}")) 
 
 # computing some aggregated statistics
-figure4 <- figure4 |>   
+figure4 <- figure4 %>%   
   left_join(
-    figure4 |>  
-      group_by(type, year) |>  
-      summarise(percentage_type = sum(percentage)) |> 
-      pivot_wider(id_cols = type, names_from = year, values_from = percentage_type) |> 
-      mutate(pp_change_type = `2021` - `2005`) |>  
+    figure4 %>%  
+      group_by(type, year) %>%  
+      summarise(percentage_type = sum(percentage)) %>% 
+      pivot_wider(id_cols = type, names_from = year, values_from = percentage_type) %>% 
+      mutate(pp_change_type = `2021` - `2005`) %>%  
       
       # find max type
-      group_by(type) |>  
-      mutate(max_type=max(`2021`, `2005`)) |>  
-      ungroup() |>  
+      group_by(type) %>%  
+      mutate(max_type=max(`2021`, `2005`)) %>%  
+      ungroup() %>%  
       
       pivot_longer(cols  = c(`2021`, `2005`), names_to = "year", values_to = "percentage_type")
     ,by = join_by("type", "year"))
 
-figure5 <- read_csv("data/figure5.csv") |>  
-  select(-any_of("...5")) |> 
-  drop_na() |> 
-  group_by(response, age_group) |>  
-  mutate(max=max(year_2005, year_2021)) |>  
-  ungroup() |>  
+figure5 <- read_csv("data/figure5.csv") %>%  
+  select(-any_of("...5")) %>% 
+  drop_na() %>% 
+  group_by(response, age_group) %>%  
+  mutate(max=max(year_2005, year_2021)) %>%  
+  ungroup() %>%  
   
-  mutate(pp_change = year_2021 - year_2005) |>  
+  mutate(pp_change = year_2021 - year_2005) %>%  
   pivot_longer(cols = c(year_2005, year_2021),
              names_to = "year",
-             values_to = "percentage") |> 
+             values_to = "percentage") %>% 
   mutate(year = str_extract(year, "\\d{4}"))
 
-figure6 <- read_csv("data/figure6.csv") |>  
-  select(-any_of("...5")) |> 
-  drop_na() |> 
-  group_by(response, type) |>  
-  mutate(max=max(year_2005, year_2021)) |>  
-  ungroup() |>  
+figure6 <- read_csv("data/figure6.csv") %>%  
+  select(-any_of("...5")) %>% 
+  drop_na() %>% 
+  group_by(response, type) %>%  
+  mutate(max=max(year_2005, year_2021)) %>%  
+  ungroup() %>%  
   
-  mutate(pp_change = year_2021 - year_2005) |>  
+  mutate(pp_change = year_2021 - year_2005) %>%  
   pivot_longer(cols = c(year_2005, year_2021),
              names_to = "year",
-             values_to = "percentage") |> 
+             values_to = "percentage") %>% 
   mutate(year = str_extract(year, "\\d{4}"))
 ```
 
 ## Theme for figures
 
-```{r}
+```{r message=FALSE}
 #load in fonts
 loadfonts(device = "win")
 
@@ -121,11 +121,11 @@ update_geom_defaults("label", list(family = "Jost", fontface = "plain"))
 nudge_value=.75
 
 figure_4 <- 
-  figure4 |> 
+  figure4 %>% 
   # reordering levels for plotting
   mutate(type = factor(type, levels = c("Forerunners - most likely getting married",
                                          "Forerunners - possibly getting married",
-                                         "Alternatives - unlikely to get married"))) |>  
+                                         "Alternatives - unlikely to get married"))) %>%  
                                          
   
   # basic mapping and aesthetics
@@ -134,9 +134,9 @@ figure_4 <-
   # Replace geom_line with geom_segment with arrows
   # Arrows for increases (2005 -> 2021)
   # Arrow shaft (line only)
-  geom_segment(data = . |>  
-                 group_by(type, response) |>  
-                 arrange(year) |> 
+  geom_segment(data = . %>%  
+                 group_by(type, response) %>%  
+                 arrange(year) %>% 
                  summarise(x_start = first(percentage), 
                            x_end = last(percentage),
                            change = x_end - x_start,
@@ -146,9 +146,9 @@ figure_4 <-
                linewidth = 3.5) +
 
   # Arrowhead only (no transparency)
-  geom_segment(data = . |>  
-                 group_by(type, response) |>  
-                 arrange(year) |> 
+  geom_segment(data = . %>%  
+                 group_by(type, response) %>%  
+                 arrange(year) %>% 
                  summarise(x_start = first(percentage), 
                            x_end = last(percentage),
                            change = x_end - x_start,
@@ -177,33 +177,21 @@ figure_4 <-
             hjust=if_else(
               figure4$percentage==figure4$max, #if it's the larger percentage
               0, # left justify
-              1),# otherwise, right justify      
+              1),# else, right justify      
             ) +
-  
-  # legend
   geom_text(aes(label = year, color = year), 
-            data=. |>  filter(response == "Prelude to marriage"),
+            data=. %>%  filter(response == "Prelude to marriage"),
             nudge_y =.25, 
             fontface="bold",
             size=3.25)+ 
-  
-  # control over year colours:
   scale_color_manual(values=c("#436685", "#BF2F24")) +
-  
-  # control over the scale
   scale_x_continuous(breaks = seq(0, 35, 10), expand = expansion(mult = c(0.1, 0.2))) +
-  
-  # facet by type
   facet_wrap(vars(type), nrow = 3, scales = "free_y") +
-  
-  # labels
   labs( 
     y = NULL,
     x = NULL,
     color = "Year"
   ) + 
-  
-  # theme control:
   theme_nice() +
   theme(legend.position = "none") 
   
@@ -214,25 +202,25 @@ ggsave(
   filename = file.path("plots", "figure_4.png"),
   plot = figure_4,
   width = 4.9,
-  height = 5.5,     # use closer to max since you have 3 rows
+  height = 5.5,
   units = "in",
   dpi = 300,
   bg = "white"
 )
 ```
 
-### numbers on the side
+### Numbers on the side
 
 ```{r}
 p_gap <- 
   
   # controlling the order of facets
-  figure4 |> 
+  figure4 %>% 
   mutate(type = factor(type, levels = c("Forerunners - most likely getting married",
                                          "Forerunners - possibly getting married",
-                                         "Alternatives - unlikely to get married"))) |> 
-  group_by(type, response) |>  
-  summarise(pp_change = max(pp_change), .groups = "drop") |>  
+                                         "Alternatives - unlikely to get married"))) %>% 
+  group_by(type, response) %>%  
+  summarise(pp_change = max(pp_change), .groups = "drop") %>%  
   
   # basic mapping and aesthetics
   ggplot(aes(x=pp_change, y=response)) +
@@ -266,7 +254,7 @@ p_whole <-
 p_whole
 
 ggsave(
-  filename = file.path("plots", "figure_4.png"),
+  filename = file.path("plots", "figure_4_w_numbers.png"),
   plot = p_whole,
   width = 4.9,
   height = 5.5,     # use closer to max since you have 3 rows
@@ -282,23 +270,23 @@ ggsave(
 nudge_value=1
 
 figure4_aggr <- 
-  figure4 |>  
-  group_by(type, year) |>  
+  figure4 %>%  
+  group_by(type, year) %>%  
   summarise(pp_change = max(pp_change_type),
             max = max(max_type),
             percentage = max(percentage_type))
 
 figure_4a <- 
-  figure4_aggr |>  
+  figure4_aggr %>%  
   mutate(type = factor(type, levels = c("Alternatives - unlikely to get married",
                                          "Forerunners - possibly getting married",
-                                         "Forerunners - most likely getting married"))) |>  
+                                         "Forerunners - most likely getting married"))) %>%  
   # plotting
   ggplot(aes(x = percentage, y = type)) +
   # Replace geom_line with geom_segment with arrows
-  geom_segment(data = . |>  
-                 group_by(type) |>  
-                 arrange(year) |> 
+  geom_segment(data = . %>%  
+                 group_by(type) %>%  
+                 arrange(year) %>% 
                  summarise(x_start = first(percentage), 
                            x_end = last(percentage),
                            .groups = "drop"),
@@ -327,7 +315,7 @@ figure_4a <-
   
   # legend
   geom_text(aes(label = year, color = year), 
-            data=. |>  filter(type == "Forerunners - most likely getting married"),
+            data=. %>%  filter(type == "Forerunners - most likely getting married"),
             nudge_y =.25, 
             fontface="bold",
             size=3.25)+ 
@@ -374,10 +362,10 @@ ggsave(
 p_gap_4a <- 
   
   # controlling the order of facets
-  figure4_aggr |>  
+  figure4_aggr %>%  
   mutate(type = factor(type, levels = c("Alternatives - unlikely to get married",
                                          "Forerunners - possibly getting married",
-                                         "Forerunners - most likely getting married"))) |> 
+                                         "Forerunners - most likely getting married"))) %>% 
   
   # basic mapping and aesthetics
   ggplot(aes(x=pp_change, y=type)) +
@@ -408,7 +396,7 @@ p_whole_4a <-
 p_whole_4a
 
 ggsave(
-  filename = file.path("plots", "figure_4_aggr.png"),
+  filename = file.path("plots", "figure_4_aggr_w_numbers.png"),
   plot = p_whole_4a,
   width = 4.9,
   height = 3, 
@@ -425,7 +413,7 @@ ggsave(
 nudge_value=.3
 
 figure_5 <- 
-  figure5 |>  
+  figure5 %>%  
   # Reordering the response vars
   mutate(
     response = factor(response,
@@ -441,7 +429,7 @@ figure_5 <-
                                 "Conformist", 
                                 "Economic reasons", 
                                 "Marriage is irrelevant"))
-  ) |>  
+  ) %>%  
   
   # basic setup
   ggplot(aes(x = year, y = percentage, color = age_group, group = age_group, linetype = age_group, shape = age_group)) +
@@ -506,7 +494,7 @@ ggsave(
 nudge_value=.3
 
 figure_6 <- 
-  figure6 |>  
+  figure6 %>%  
   # Reordering the response vars
   mutate(
     response = factor(response,
@@ -526,7 +514,7 @@ figure_6 <-
                   levels = c("Low",
                              "Medium",
                              "High"))
-  ) |>  
+  ) %>%  
   
   # basic setup
   ggplot(aes(x = year, y = percentage, color = type, group = type, linetype = type, shape = type)) +
