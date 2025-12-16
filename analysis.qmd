@@ -231,7 +231,7 @@ Key variables in construction of typology
 -   econ - HH able to make ends meet
 
 ```{r}
-analysis <- analysis |> 
+analysis <- analysis |>
   mutate(
     
     # scales were reversed between waves, 2005 has them going from agree to disagree, this construction is based on the opposite
@@ -323,8 +323,11 @@ analysis_sample <- analysis |>
   # optional switch to eliminate the pilot
   # filter(survey_type != 3) |> 
   
-  filter(age < 70  & !(is.na(edu3)) & edu3 != "unknown" & !(is.na(typ)))
-# not missing on typology and education. Under the age of 70, 
+  # Sample definition - not missing partnership status and under 70
+  filter(!is.na(parstat) & age < 70) |> 
+  
+  filter(!(is.na(edu3)) & edu3 != "unknown" & !(is.na(typ)))
+# not missing on typology and education. 
   
 figure4 <- analysis_sample |> 
   summarise(
