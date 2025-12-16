@@ -27,7 +27,6 @@ library(sjmisc)
 round1 <- read_dta(file.path("data", "ggp", "round1.dta"))
 round2 <- read_dta(file.path("data", "ggp", "round2.dta"))
 pilot <- read_dta(file.path("data", "ggp", "pilot.dta"))
-pilot_followup <- read_dta(file.path("data", "ggp", "pilot_followup.dta"))
 ```
 
 ## Tidy round 1
@@ -136,10 +135,89 @@ round2tidy <- round2 |>
   )
 ```
 
+## Tidy round 2 pilot
+
+```{r}
+pilot2tidy <- pilot |> 
+  select(
+    dem21, dem28a, dem30a, dem28c, att03a, inc03, dem30bm, dem30by, dem28bm, dem28by, dem33, dem07, dem25, dem01, dem23, dem02m, dem02y, dem22m, dem22y, dem06, respid, country, mode, intdatem, intdatey
+  ) |> 
+  mutate(
+    parstat = case_when(
+      dem21 == 1 & dem28a == 2 & dem30a == 1 ~ 1, # cohabiting
+      dem21 == 1 & dem28a == 1 ~ 2, # married
+      dem21 == 1 & dem28a == 2 & dem30a == 2 ~ 3, # LAT
+      dem21 == 2 ~ 4, # single
+      TRUE ~ NA
+    ),
+    dem07 = case_when(
+      dem07 == 2801 ~ 2,
+      dem07 == 2802 ~ 2,
+      dem07 == 2803 ~ 3,
+      dem07 == 2804 ~ 4,
+      dem07 == 2805 ~ 5,
+      dem07 == 2806 ~ 5,
+      dem07 == 2807 ~ 6,
+      dem07 == 2808 ~ 6,
+      TRUE ~ NA
+    ),
+    dem25 = case_when(
+      dem25 == 2801 ~ 2,
+      dem25 == 2802 ~ 2,
+      dem25 == 2803 ~ 3,
+      dem25 == 2804 ~ 4,
+      dem25 == 2805 ~ 5,
+      dem25 == 2806 ~ 5,
+      dem25 == 2807 ~ 6,
+      dem25 == 2808 ~ 6,
+      TRUE ~ NA
+    ),
+    dem06 = case_when(
+      dem06 == 2 ~ 1,
+      dem06 == 3 ~ 1,
+      dem06 == 4 ~ 2,
+      dem06 == 5 ~ 3,
+      dem06 == 1 ~ 4,
+      dem06 == 6 ~ 5,
+      dem06 == 9 ~ 6,
+      dem06 == 10 ~ 6,
+      dem06 == 11 ~ 7,
+      dem06 == 7 ~ 9,
+      dem06 == 12 ~ 10,
+      TRUE ~ NA
+    ),
+
+  ) |> 
+  rename(
+    a301m = dem30bm,
+    a301y = dem30by,
+    a302bm = dem28bm,
+    a302by = dem28by,
+    edu = dem07,
+    edup = dem25,
+    sex = dem01,
+    sexp = dem23,
+    birthm = dem02m,
+    birthy = dem02y,
+    birthpm = dem22m,
+    birthpy = dem22y,
+    activ = dem06,
+    acountry = country,
+    amonth = intdatem,
+    ayear = intdatey
+  )
+```
+
 ## Appending
 
-```{r message=FALSE}
-analysis <- add_rows(round1tidy, round2tidy, id = "survey")
+```{r message=FALSE, warning=FALSE}
+analysis <- add_rows(round1tidy, round2tidy, pilot2tidy, id = "survey_type") |> 
+  mutate(survey = case_when(
+    survey_type == 1 ~ "2005",
+    survey_type == 2 ~ "2021",
+    survey_type == 3 ~ "2021"
+  )) |> 
+  mutate(weight = if_else(survey_type == 3, 1, weight))
 ```
 
 ## Creation of typology
@@ -158,18 +236,18 @@ analysis <- analysis |>
     
     # scales were reversed between waves, 2005 has them going from agree to disagree, this construction is based on the opposite
     
-    att03afix = if_else(survey == 1, 6 - att03a, att03a),
+    att03afix = if_else(survey_type != 1, 6 - att03a, att03a),
     
     att = case_when(
-      att03afix == 4 | att03afix == 5 ~ 1, # agree
-      att03afix == 1 | att03afix == 2 ~ 2, # disagree
+      att03afix == 1 | att03afix == 2 ~ 1, # agree
+      att03afix == 4 | att03afix == 5 ~ 2, # disagree
       att03afix == 3 ~ 3, # indifferent
       TRUE ~ NA
     ),
     
     # Have to fix dem28c because they have inconsistent scales (2021 version has an unsure as value 3), I'm fixing it by adding 1 responses 3 and 4 in the 2005 version
     
-    dem28cfix = if_else(survey == 1 & dem28c > 2, dem28c + 1, dem28c),
+    dem28cfix = if_else(survey_type == 1 & dem28c > 2, dem28c + 1, dem28c),
     
     int3 = case_when(
       dem28cfix == 4 | dem28cfix == 5 ~ 1, # yes
@@ -211,8 +289,8 @@ analysis <- analysis |>
     age4 = case_when(
       age >= 18 & age <= 34 ~ "18-34",
       age >= 35 & age <= 51 ~ "35-51",
-      age >= 52 & age <= 70 ~ "52-70",
-      age >= 71 ~ "70+",
+      age >= 52 & age <= 69 ~ "52-69",
+      age >= 70 ~ "70+",
       TRUE ~ NA_character_
     ),
     
@@ -226,6 +304,13 @@ analysis <- analysis |>
       cohab==1 & int3==0 & att==1 ~ "Refusal",
       cohab==1 & int3==0 & att==3 ~ "Irrelevant",
       TRUE ~ NA
+    ),
+    
+    big_type = case_when(
+      typ %in% c("Prelude", "Conformist") ~ "Forerunners - most likely getting married",
+      typ %in% c("Trial", "Economic") ~ "Forerunners - possibly getting married",
+      typ %in% c("Refusal", "Irrelevant") ~ "Alternatives - unlikely to get married",
+      TRUE ~ NA
     )
   )
 ```
@@ -234,28 +319,37 @@ analysis <- analysis |>
 
 ```{r}
 analysis_sample <- analysis |> 
-  filter(age < 60 & parstat == 1 & !(is.na(edu3)) & edu3 != "unknown" & !(is.na(typ))) 
-# not missing on typology, education or partnership status. Cohabitant and under the age of 60, 
-
+  
+  # optional switch to eliminate the pilot
+  # filter(survey_type != 3) |> 
+  
+  filter(age < 70  & !(is.na(edu3)) & edu3 != "unknown" & !(is.na(typ)))
+# not missing on typology and education. Under the age of 70, 
+  
 figure4 <- analysis_sample |> 
   summarise(
     weight = sum(weight),
-    .by = c("survey", "typ")
+    .by = c("survey", "big_type", "typ")
   ) |> 
   mutate(
     total_weight = sum(weight), .by = survey
   ) |> 
   mutate(
     prop = weight/total_weight
-  )
+  ) |>
+  mutate(
+    weight_big = sum(weight), .by = c("survey", "big_type")
+  ) |> 
+  mutate(prob_big = weight_big/total_weight) |> 
+  arrange(survey, big_type, typ)
 
 figure5 <- analysis_sample |> 
   summarise(
     weight = sum(weight),
-    .by = c("survey", "age3" , "typ")
+    .by = c("survey", "age4" , "typ")
   ) |> 
   mutate(
-    total_weight = sum(weight), .by = c("survey", "age3")
+    total_weight = sum(weight), .by = c("survey", "age4")
   ) |> 
   mutate(
     prop = weight/total_weight
