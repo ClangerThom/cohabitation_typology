@@ -4,14 +4,6 @@ format: html
 editor: visual
 ---
 
-## To-do list
-
--   [ ] Harmonise the pilot
-
-## Inconsistencies?
-
--   Why age under 60?
-
 ## Setup
 
 ```{r libs message=FALSE}

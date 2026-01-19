@@ -1,0 +1,320 @@
+---
+title: "tables"
+format: html
+editor: visual
+---
+
+## Libraries
+
+```{r}
+library(tidyverse)
+library(flextable)
+library(officer)
+```
+
+## Creating tables
+
+```{r table-2}
+table2 <- analysis |> 
+  mutate(survey = case_when(
+    survey == "2021" ~ "GGS 2021",
+    survey == "2005" ~ "GGS 2005"
+  )) |> 
+  summarise(
+    original_sample = n(),
+    .by = survey
+  ) |> 
+  
+  left_join(
+    analysis |> 
+      mutate(survey = case_when(
+        survey == "2021" ~ "GGS 2021",
+        survey == "2005" ~ "GGS 2005"
+      )) |> 
+      filter(age < 70) |> 
+      summarise(
+        population = n(),
+        .by = survey
+      ),
+    by = join_by(survey)
+  ) |> 
+  
+  left_join(
+    analysis |> 
+      mutate(survey = case_when(
+        survey == "2021" ~ "GGS 2021",
+        survey == "2005" ~ "GGS 2005"
+      )) |> 
+      filter(age < 70 & (parstat == 1 | parstat == 2)) |> 
+      summarise(
+        co_residents = n(),
+        .by = survey
+      ),
+    by = join_by(survey)
+  ) |> 
+  
+  left_join(
+    analysis_sample |> 
+      mutate(survey = case_when(
+        survey == "2021" ~ "GGS 2021",
+        survey == "2005" ~ "GGS 2005"
+      )) |> 
+      summarise(
+        cohabitors = n(),
+        .by = survey
+      ),
+    by = join_by(survey)
+  ) |> 
+  
+table2 <- table2 |> 
+  bind_rows(
+    table2 |> 
+      summarise(
+        survey = "Total",
+        original_sample = sum(original_sample),
+        population = sum(population),
+        co_residents = sum(co_residents),
+        cohabitors = sum(cohabitors)
+      )
+  )
+```
+
+```{r table-3}
+table3 <- analysis |> 
+  mutate(sex = case_when(
+    sex == 1 ~ "Male",
+    sex == 2 ~ "Female"
+  )) |> 
+  
+  filter(!is.na(age4) & age < 70) |> 
+  group_by(survey) |> 
+  mutate(total_weight = sum(weight)) |> 
+  ungroup() |> 
+  summarise(
+    sample = "Population",
+    count = sum(weight),
+    total_weight = first(total_weight),
+    prop = count / total_weight,
+    .by = c(sex, survey)
+  ) |> 
+  
+  bind_rows(
+    analysis |> 
+      mutate(sex = case_when(
+        sex == 1 ~ "Male",
+        sex == 2 ~ "Female"
+      )) |> 
+      
+      filter(!is.na(age4) & age < 70 & (parstat == 1 | parstat == 2)) |> 
+      group_by(survey) |> 
+      mutate(total_weight = sum(weight)) |> 
+      ungroup() |> 
+      summarise(
+        sample = "Co-residents",
+        count = sum(weight),
+        total_weight = first(total_weight),
+        prop = count / total_weight,
+        .by = c(sex, survey)
+      )
+  ) |> 
+  
+  bind_rows(
+    analysis_sample |> 
+      mutate(sex = case_when(
+        sex == 1 ~ "Male",
+        sex == 2 ~ "Female"
+      )) |> 
+      
+      group_by(survey) |> 
+      mutate(total_weight = sum(weight)) |> 
+      ungroup() |> 
+      summarise(
+        sample = "Cohabitors",
+        count = sum(weight),
+        total_weight = first(total_weight),
+        prop = count / total_weight,
+        .by = c(sex, survey)
+      )
+  ) |> 
+  
+  bind_rows(
+    analysis |> 
+      filter(age < 70) |> 
+      summarise(
+        sample = "Population",
+        age_mean = weighted.mean(age, weight),
+        .by = survey
+      )
+  ) |> 
+  
+  bind_rows(
+    analysis |> 
+      filter(age < 70 & (parstat == 1 | parstat == 2)) |> 
+      summarise(
+        sample = "Co-residents",
+        age_mean = weighted.mean(age, weight),
+        .by = survey
+      )
+  ) |> 
+  
+  bind_rows(
+    analysis_sample |> 
+      summarise(
+        sample = "Cohabitors",
+        age_mean = weighted.mean(age, weight),
+        .by = survey
+      )
+  ) |> 
+  
+  # Age - weighted sd
+  bind_rows(
+    analysis |> 
+      filter(age < 70) |> 
+      summarise(
+        sample = "Population",
+        age_sd = sqrt(weighted.mean((age - weighted.mean(age, weight))^2, weight)),
+        .by = survey
+      )
+  ) |> 
+  
+  bind_rows(
+    analysis |> 
+      filter(age < 70 & (parstat == 1 | parstat == 2)) |> 
+      summarise(
+        sample = "Co-residents",
+        age_sd = sqrt(weighted.mean((age - weighted.mean(age, weight))^2, weight)),
+        .by = survey
+      )
+  ) |> 
+  
+  bind_rows(
+    analysis_sample |> 
+      summarise(
+        sample = "Cohabitors",
+        age_sd = sqrt(weighted.mean((age - weighted.mean(age, weight))^2, weight)),
+        .by = survey
+      )
+  ) |> 
+  
+  # Age groups - age4
+  bind_rows(
+    analysis |> 
+      filter(!is.na(age4) & age < 70) |> 
+      group_by(survey) |> 
+      mutate(total_weight = sum(weight)) |> 
+      ungroup() |> 
+      summarise(
+        sample = "Population",
+        count = sum(weight),
+        total_weight = first(total_weight),
+        prop = count / total_weight,
+        .by = c(age4, survey)
+      )
+  ) |> 
+  
+  bind_rows(
+    analysis |> 
+      filter(!is.na(age4) & age < 70 & (parstat == 1 | parstat == 2)) |> 
+      group_by(survey) |> 
+      mutate(total_weight = sum(weight)) |> 
+      ungroup() |> 
+      summarise(
+        sample = "Co-residents",
+        count = sum(weight),
+        total_weight = first(total_weight),
+        prop = count / total_weight,
+        .by = c(age4, survey)
+      )
+  ) |> 
+  
+  bind_rows(
+    analysis_sample |> 
+      group_by(survey) |> 
+      mutate(total_weight = sum(weight)) |> 
+      ungroup() |> 
+      summarise(
+        sample = "Cohabitors",
+        count = sum(weight),
+        total_weight = first(total_weight),
+        prop = count / total_weight,
+        .by = c(age4, survey)
+      )
+  ) |> 
+  
+  # Education - edu3
+  bind_rows(
+    analysis |> 
+      filter(!is.na(age4) & age < 70) |> 
+      group_by(survey) |> 
+      mutate(total_weight = sum(weight)) |> 
+      ungroup() |> 
+      summarise(
+        sample = "Population",
+        count = sum(weight),
+        total_weight = first(total_weight),
+        prop = count / total_weight,
+        .by = c(edu3, survey)
+      )
+  ) |> 
+  
+  bind_rows(
+    analysis |> 
+      filter(!is.na(age4) & age < 70 & (parstat == 1 | parstat == 2)) |> 
+      group_by(survey) |> 
+      mutate(total_weight = sum(weight)) |> 
+      ungroup() |> 
+      summarise(
+        sample = "Co-residents",
+        count = sum(weight),
+        total_weight = first(total_weight),
+        prop = count / total_weight,
+        .by = c(edu3, survey)
+      )
+  ) |> 
+  
+  bind_rows(
+    analysis_sample |> 
+      group_by(survey) |> 
+      mutate(total_weight = sum(weight)) |> 
+      ungroup() |> 
+      summarise(
+        sample = "Cohabitors",
+        count = sum(weight),
+        total_weight = first(total_weight),
+        prop = count / total_weight,
+        .by = c(edu3, survey)
+      )
+  )
+  
+# massaging it into the stupid format
+table3proper <- table3 |> 
+  
+  mutate(prop_type = case_when(
+    !is.na(sex) ~ sex,
+    !is.na(age4) ~ age4,
+    !is.na(edu3) ~ edu3,
+    !is.na(age_sd) ~ "Age SD",
+    TRUE ~ "Mean age"
+  )) |> 
+  
+  mutate(prop = case_when(
+    is.na(prop) & !is.na(age_sd) ~ age_sd,
+    is.na(prop) & !is.na(age_mean) ~ age_mean,
+    TRUE ~ prop
+    )) |> 
+  
+  select(-sex, -count, -total_weight, -age4, -edu3, -age_mean, -age_sd) |> 
+  
+  mutate(prop = if_else(
+    prop_type == "Age SD" | prop_type == "Mean age", 
+    round(prop),
+    round(prop*100))) |> 
+  
+  pivot_wider()
+```
+
+```{r table-4}
+
+```
+
+## Exporting tables
