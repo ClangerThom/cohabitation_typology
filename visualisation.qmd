@@ -22,6 +22,11 @@ library(ggrepel)
 
 ```{r massaging-variables-figure4}
 figure4proper <- figure4 |> 
+  
+  # round the values and put them into percentage point format
+  mutate(across(where(is.numeric), ~round(. * 100))) |> 
+  select(-contains("weight")) |> 
+  
   rename(
     type = big_type,
     response = typ,
@@ -43,7 +48,8 @@ figure4proper <- figure4 |>
   
   # Block of code for calculating pp change between rounds on responses
   left_join(
-    figure4 |> 
+    figure4 |>
+      mutate(across(where(is.numeric), ~round(. * 100))) |> 
       rename(
         response = typ,
         percentage = prop,
@@ -79,7 +85,8 @@ figure4proper <- figure4 |>
   
   # block of code for calculaing pp change between rounds on types
   left_join(
-    figure4 |> 
+    figure4 |>
+      mutate(across(where(is.numeric), ~round(. * 100))) |>
       rename(
         type = big_type,
         response = typ,
@@ -98,7 +105,7 @@ figure4proper <- figure4 |>
         )
       ) |> 
       group_by(type, year) %>%  
-      summarise(percentage_type = sum(percentage)) %>% 
+      summarise(percentage_type = max(percentage_type)) %>% 
       pivot_wider(id_cols = type, names_from = year, values_from = percentage_type) %>% 
       mutate(pp_change_type = `2021` - `2005`) %>%  
       
@@ -110,12 +117,12 @@ figure4proper <- figure4 |>
       pivot_longer(cols  = c(`2021`, `2005`), names_to = "year", values_to = "percentage_type") |> 
       select(-percentage_type)
     ,by = join_by("type", "year")) |> 
-  select(-contains("weight")) |> 
   arrange(type, response)
 ```
 
 ```{r massaging-variables-figure5}
 figure5proper <- figure5 |> 
+  mutate(across(where(is.numeric), ~round(. * 100))) |>
   rename(
     response = typ,
     percentage = prop,
@@ -125,6 +132,7 @@ figure5proper <- figure5 |>
   select(-contains("weight")) |> 
   left_join(
     figure5 |> 
+      mutate(across(where(is.numeric), ~round(. * 100))) |>
       rename(
         response = typ,
         percentage = prop,
@@ -148,6 +156,7 @@ figure5proper <- figure5 |>
 
 ```{r massaging-variables-figure6}
 figure6proper <- figure6 |> 
+  mutate(across(where(is.numeric), ~round(. * 100))) |>
   rename(
     response = typ,
     percentage = prop,
@@ -157,6 +166,7 @@ figure6proper <- figure6 |>
   select(-contains("weight")) |> 
   left_join(
     figure6 |> 
+      mutate(across(where(is.numeric), ~round(. * 100))) |>
       rename(
         response = typ,
         percentage = prop,
