@@ -64,7 +64,7 @@ table2 <- analysis |>
         .by = survey
       ),
     by = join_by(survey)
-  ) |> 
+  )
   
 table2 <- table2 |> 
   bind_rows(
@@ -305,16 +305,345 @@ table3proper <- table3 |>
   
   select(-sex, -count, -total_weight, -age4, -edu3, -age_mean, -age_sd) |> 
   
-  mutate(prop = if_else(
-    prop_type == "Age SD" | prop_type == "Mean age", 
-    round(prop),
-    round(prop*100))) |> 
+  mutate(prop = case_when(
+    prop_type == "Age SD" | prop_type == "Mean age" ~  round(prop),
+    prop_type != "unknown" ~ round(prop*100),
+    round(prop*100) != 0 ~ round(prop*100),
+    TRUE ~ round(prop*100, digits = 1)
+    )) |> 
   
-  pivot_wider()
+  pivot_wider(
+    id_cols = c(prop_type, sample),
+    values_from = prop, 
+    names_from = survey,
+    names_prefix = "year_"
+    ) |> 
+  mutate(
+    variable = case_when(
+      prop_type %in% c("high", "mid", "low", "unknown") ~ "Education",
+      prop_type %in% c("Male", "Female") ~ "Sex",
+      prop_type %in% c("Mean age", "Age SD", "18-34", "35-51", "52-69") ~ "Age",
+      TRUE ~ NA
+    )
+  ) |> 
+  arrange(variable, sample)
 ```
 
 ```{r table-4}
-
+table4 <- analysis |>
+  
+  filter(age<70 & !is.na(parstat)) |> 
+  
+  group_by(survey) |> 
+  mutate(total = sum(weight)) |> 
+  ungroup() |> 
+  
+  summarise(
+    sample = "Population",
+    total = first(total),
+    partial_total = sum(weight),
+    prop = round(partial_total/total * 100),
+    .by = c(parstat, survey)
+  ) |> 
+  select(-contains("total")) |> 
+  mutate(parstat = case_when(
+    parstat == 4 ~ "Single",
+    parstat == 3 ~ "LAT",
+    parstat == 2 ~ "Married",
+    parstat == 1 ~ "Cohabiting"
+    )
+  ) |> 
+  bind_rows(
+    analysis |> 
+      filter(age<70 & (parstat == 2 | parstat == 1)) |> 
+      
+      group_by(survey) |> 
+      mutate(total = sum(weight)) |> 
+      ungroup() |>
+      
+      summarise(
+        sample = "Co-residents",
+        total = first(total),
+        partial_total = sum(weight),
+        prop = round(partial_total/total*100),
+        .by = c(parstat, survey)
+      ) |> 
+      select(-contains("total")) |> 
+      mutate(parstat = case_when(
+        parstat == 2 ~ "Married",
+        parstat == 1 ~ "Cohabiting"
+        )
+      ) 
+  )
 ```
 
 ## Exporting tables
+
+```{r table 2 export}
+ft <- flextable(table2) %>%
+  set_header_labels(
+    survey = "",
+    original_sample = "Original sample",
+    population = "Population",
+    co_residents = "Co-residents",
+    cohabitors = "Cohabitors"
+  ) %>%
+  colformat_int(j = c("original_sample", "population", "co_residents", "cohabitors"),
+                big.mark = ",") %>%
+  bold(i = 3, bold = TRUE) %>%
+  hline(i = 2, border = fp_border(color = "black", width = 1)) %>%
+  hline_top(border = fp_border(color = "black", width = 2)) %>%
+  hline_bottom(border = fp_border(color = "black", width = 2)) %>%
+  align(j = 2:5, align = "center", part = "all") %>%
+  align(j = 1, align = "left", part = "body") %>%
+  width(j = 1, width = 1.2) %>%
+  width(j = 2:5, width = 1.2) %>%
+  font(fontname = "Arial", part = "all") %>%
+  fontsize(size = 10, part = "all")
+
+doc <- read_docx() %>%
+  body_add_flextable(ft)
+
+print(doc, target = file.path("tables", "table2.docx"))
+```
+
+
+```{r table 3 export}
+df_wide <- table3proper %>%
+  pivot_wider(
+    names_from = sample,
+    values_from = c(year_2005, year_2021)
+  ) %>%
+  select(variable, prop_type, 
+         year_2005_Population, year_2021_Population,
+         year_2005_Co_residents = `year_2005_Co-residents`, 
+         year_2021_Co_residents = `year_2021_Co-residents`,
+         year_2005_Cohabitors, year_2021_Cohabitors) %>%
+  arrange(
+          case_when(
+            variable == "Sex" ~ 1,
+            variable == "Age" ~ 2,
+            variable == "Education" ~ 3,
+            TRUE ~ 99
+          ),
+          case_when(
+            prop_type == "Male" ~ 1,
+            prop_type == "Female" ~ 2,
+            prop_type == "Mean age" ~ 1,
+            prop_type == "Age SD" ~ 2,
+            prop_type == "18-34" ~ 3,
+            prop_type == "35-51" ~ 4,
+            prop_type == "52-69" ~ 5,
+            prop_type == "high" ~ 1,
+            prop_type == "mid" ~ 2,
+            prop_type == "low" ~ 3,
+            prop_type == "unknown" ~ 4,
+            TRUE ~ 99
+          ))
+
+format_value <- function(x, row_name, sd_val = NULL) {
+  if (is.na(x)) return(".")
+  if (row_name == "Mean age" && !is.null(sd_val) && !is.na(sd_val)) {
+    return(paste0(x, " (", sd_val, ")"))
+  } else if (row_name == "Age SD") {
+    return("")
+  } else if (row_name == "Mean age") {
+    return(as.character(x))
+  } else {
+    return(paste0(x, " %"))
+  }
+}
+
+df_with_sd <- df_wide %>%
+  group_by(variable) %>%
+  mutate(
+    sd_2005_Population = ifelse(length(year_2005_Population[prop_type == "Age SD"]) > 0, 
+                                year_2005_Population[prop_type == "Age SD"], NA),
+    sd_2021_Population = ifelse(length(year_2021_Population[prop_type == "Age SD"]) > 0,
+                                year_2021_Population[prop_type == "Age SD"], NA),
+    sd_2005_Co_residents = ifelse(length(year_2005_Co_residents[prop_type == "Age SD"]) > 0,
+                                  year_2005_Co_residents[prop_type == "Age SD"], NA),
+    sd_2021_Co_residents = ifelse(length(year_2021_Co_residents[prop_type == "Age SD"]) > 0,
+                                  year_2021_Co_residents[prop_type == "Age SD"], NA),
+    sd_2005_Cohabitors = ifelse(length(year_2005_Cohabitors[prop_type == "Age SD"]) > 0,
+                                year_2005_Cohabitors[prop_type == "Age SD"], NA),
+    sd_2021_Cohabitors = ifelse(length(year_2021_Cohabitors[prop_type == "Age SD"]) > 0,
+                                year_2021_Cohabitors[prop_type == "Age SD"], NA)
+  ) %>%
+  ungroup()
+
+df_formatted <- df_with_sd %>%
+  mutate(across(starts_with("year"), 
+                ~ifelse(. == 0, NA, .))) %>%
+  rowwise() %>%
+  mutate(
+    year_2005_Population = format_value(year_2005_Population, prop_type, sd_2005_Population),
+    year_2021_Population = format_value(year_2021_Population, prop_type, sd_2021_Population),
+    year_2005_Co_residents = format_value(year_2005_Co_residents, prop_type, sd_2005_Co_residents),
+    year_2021_Co_residents = format_value(year_2021_Co_residents, prop_type, sd_2021_Co_residents),
+    year_2005_Cohabitors = format_value(year_2005_Cohabitors, prop_type, sd_2005_Cohabitors),
+    year_2021_Cohabitors = format_value(year_2021_Cohabitors, prop_type, sd_2021_Cohabitors)
+  ) %>%
+  ungroup() %>%
+  mutate(
+    prop_type = case_when(
+      prop_type == "Mean age" ~ "Mean (SD)",
+      prop_type == "low" ~ "Low",
+      prop_type == "mid" ~ "Mid",
+      prop_type == "high" ~ "High",
+      prop_type == "unknown" ~ "Unknown",
+      TRUE ~ prop_type
+    )
+  ) %>%
+  filter(prop_type != "Age SD")
+
+sex_rows <- df_formatted %>% filter(variable == "Sex") %>% select(-variable, -starts_with("sd_"))
+age_rows <- df_formatted %>% filter(variable == "Age") %>% select(-variable, -starts_with("sd_"))
+education_rows <- df_formatted %>% filter(variable == "Education") %>% select(-variable, -starts_with("sd_"))
+
+sex_header <- data.frame(
+  prop_type = "Sex",
+  year_2005_Population = "", year_2021_Population = "",
+  year_2005_Co_residents = "", year_2021_Co_residents = "",
+  year_2005_Cohabitors = "", year_2021_Cohabitors = ""
+)
+
+age_header <- data.frame(
+  prop_type = "Age",
+  year_2005_Population = "", year_2021_Population = "",
+  year_2005_Co_residents = "", year_2021_Co_residents = "",
+  year_2005_Cohabitors = "", year_2021_Cohabitors = ""
+)
+
+education_header <- data.frame(
+  prop_type = "Education",
+  year_2005_Population = "", year_2021_Population = "",
+  year_2005_Co_residents = "", year_2021_Co_residents = "",
+  year_2005_Cohabitors = "", year_2021_Cohabitors = ""
+)
+
+df_with_headers <- bind_rows(
+  sex_header, sex_rows,
+  age_header, age_rows,
+  education_header, education_rows
+)
+
+total_row <- data.frame(
+  prop_type = "N",
+  year_2005_Population = format(table2$population[1], big.mark = ","),
+  year_2021_Population = format(table2$population[2], big.mark = ","),
+  year_2005_Co_residents = format(table2$co_residents[1], big.mark = ","),
+  year_2021_Co_residents = format(table2$co_residents[2], big.mark = ","),
+  year_2005_Cohabitors = format(table2$cohabitors[1], big.mark = ","),
+  year_2021_Cohabitors = format(table2$cohabitors[2], big.mark = ",")
+)
+
+df_final <- bind_rows(df_with_headers, total_row)
+
+section_rows <- which(df_final$prop_type %in% c("Sex", "Age", "Education"))
+
+ft <- flextable(df_final) %>%
+  delete_part(part = "header") %>%
+  add_header_row(
+    values = c("", "Population", "Co-residents", "Cohabitors"),
+    colwidths = c(1, 2, 2, 2)
+  ) %>%
+  add_header_row(
+    values = c("", "2005", "2021", "2005", "2021", "2005", "2021"),
+    colwidths = c(1, 1, 1, 1, 1, 1, 1)
+  ) %>%
+  set_header_labels(prop_type = "") %>%
+  align(align = "center", part = "header") %>%
+  align(j = 2:7, align = "center", part = "body") %>%
+  align(j = 1, align = "left", part = "body") %>%
+  bold(i = section_rows, j = 1, bold = TRUE) %>%
+  bold(i = nrow(df_final), bold = TRUE) %>%
+  border_remove() %>%
+  hline_top(border = fp_border(color = "black", width = 2), part = "header") %>%
+  hline(i = 1, border = fp_border(color = "white", width = 1), part = "header") %>%
+  hline(i = 2, border = fp_border(color = "black", width = 1), part = "header") %>%
+  hline_bottom(border = fp_border(color = "black", width = 2), part = "body") %>%
+  hline(i = nrow(df_final) - 1, border = fp_border(color = "black", width = 1), part = "body") %>%
+  font(fontname = "Arial", part = "all") %>%
+  fontsize(size = 10, part = "all") %>%
+  width(j = 1, width = 1.3) %>%
+  width(j = 2:7, width = 0.9) %>%
+  padding(padding = 3, part = "all")
+
+doc <- read_docx() %>%
+  body_add_flextable(ft)
+
+print(doc, target = file.path("tables", "table3.docx"))
+```
+
+
+```{r table 4 export}
+df_wide <- table4 %>%
+  pivot_wider(
+    names_from = c(sample, survey),
+    values_from = prop,
+    names_sep = "_"
+  ) %>%
+  select(parstat, Population_2005, Population_2021, `Co-residents_2005`, `Co-residents_2021`)
+
+df_formatted <- df_wide %>%
+  mutate(across(where(is.numeric), ~ifelse(is.na(.), ".", paste0(., " %")))) %>%
+  arrange(case_when(
+    parstat == "Marriage" ~ 1,
+    parstat == "Married" ~ 1,
+    parstat == "Cohabitation" ~ 2,
+    parstat == "Cohabiting" ~ 2,
+    parstat == "LAT" ~ 3,
+    parstat == "Single" ~ 4,
+    TRUE ~ 99
+  ))
+
+df_formatted$parstat[df_formatted$parstat == "Married"] <- "Marriage"
+df_formatted$parstat[df_formatted$parstat == "Cohabiting"] <- "Cohabitation"
+
+total_row <- data.frame(
+  parstat = "N",
+  Population_2005 = format(table2$population[1], big.mark = ","),
+  Population_2021 = format(table2$population[2], big.mark = ","),
+  `Co-residents_2005` = format(table2$co_residents[1], big.mark = ","),
+  `Co-residents_2021` = format(table2$co_residents[2], big.mark = ","),
+  check.names = FALSE
+)
+
+df_final <- bind_rows(df_formatted, total_row)
+
+ft <- flextable(df_final) %>%
+  delete_part(part = "header") %>%
+  add_header_row(
+    values = c("", "Population", "Co-residents"),
+    colwidths = c(1, 2, 2)
+  ) %>%
+  add_header_row(
+    values = c("", "2005", "2021", "2005", "2021"),
+    colwidths = c(1, 1, 1, 1, 1)
+  ) %>%
+  set_header_labels(parstat = "") %>%
+  align(align = "center", part = "header") %>%
+  align(j = 2:5, align = "center", part = "body") %>%
+  align(j = 1, align = "left", part = "body") %>%
+  bold(i = nrow(df_final), bold = TRUE) %>%
+  bg(part = "header", bg = "white") %>%
+  border_remove() %>%
+  hline_top(border = fp_border(color = "black", width = 2), part = "header") %>%
+  hline(i = 1, border = fp_border(color = "black", width = 1), part = "header") %>%
+  hline(i = 2, border = fp_border(color = "black", width = 1), part = "header") %>%
+  hline_bottom(border = fp_border(color = "black", width = 2), part = "body") %>%
+  hline(i = nrow(df_final) - 1, border = fp_border(color = "black", width = 1), part = "body") %>%
+  font(fontname = "Arial", part = "all") %>%
+  fontsize(size = 10, part = "all") %>%
+  width(j = 1, width = 1.3) %>%
+  width(j = 2:5, width = 1.1) %>%
+  padding(padding = 3, part = "all")
+
+doc <- read_docx() %>%
+  body_add_flextable(ft)
+
+
+print(doc, target = file.path("tables", "table4.docx"))
+```
+
