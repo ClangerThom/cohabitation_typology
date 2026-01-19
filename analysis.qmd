@@ -357,7 +357,7 @@ figure5 <- analysis_sample |>
   mutate(
     prop = weight/total_weight
   ) |> 
-  arrange(survey, typ, age3)
+  arrange(survey, typ, age4)
 
 figure6 <- analysis_sample |> 
   summarise(

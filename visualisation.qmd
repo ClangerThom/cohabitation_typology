@@ -20,23 +20,83 @@ library(ggrepel)
 
 ## Importing data
 
-```{r message=FALSE}
-figure4 <- read_csv("data/figure4.csv") %>%
-  select(-any_of("...5")) %>% 
-  drop_na() %>% 
-  group_by(response) %>%  
-  mutate(max=max(year_2005, year_2021)) %>%  
-  ungroup() %>%  
-  mutate(pp_change = year_2021 - year_2005) %>%  
-  pivot_longer(cols = c(year_2005, year_2021),
-               names_to = "year",
-               values_to = "percentage") %>% 
-  mutate(year = str_extract(year, "\\d{4}")) 
-
-# computing some aggregated statistics
-figure4 <- figure4 %>%   
+```{r massaging-variables-figure4}
+figure4proper <- figure4 |> 
+  rename(
+    type = big_type,
+    response = typ,
+    percentage = prop,
+    percentage_type = prob_big,
+    year = survey 
+  ) |> 
+  select(response, type, percentage, percentage_type, everything()) |> 
+  mutate(
+    response = case_when(
+      response == "Irrelevant" ~ "Marriage is irrelevant",
+      response == "Refusal" ~ "Refusal of marriage",
+      response == "Economic" ~ "Economic reasons",
+      response == "Trial" ~ "Trial marriage",
+      response == "Prelude" ~ "Prelude to marriage",
+      TRUE ~ response
+    )
+  ) |> 
+  
+  # Block of code for calculating pp change between rounds on responses
   left_join(
-    figure4 %>%  
+    figure4 |> 
+      rename(
+        response = typ,
+        percentage = prop,
+        year = survey
+      ) |> 
+      mutate(
+        response = case_when(
+          response == "Irrelevant" ~ "Marriage is irrelevant",
+          response == "Refusal" ~ "Refusal of marriage",
+          response == "Economic" ~ "Economic reasons",
+          response == "Trial" ~ "Trial marriage",
+          response == "Prelude" ~ "Prelude to marriage",
+          TRUE ~ response
+        )
+      ) |> 
+    pivot_wider(
+      id_cols = response, 
+      names_from = year, 
+      names_prefix = "year_",
+      values_from  = percentage
+      ) |>
+      mutate(pp_change = year_2021 - year_2005) |> 
+      group_by(response) |> 
+      mutate(max = max(year_2005, year_2021)) |> 
+      ungroup() |> 
+      pivot_longer(cols = c(year_2005, year_2021),
+                   names_to = "year",
+                   names_prefix = "year_",
+                   values_to = "percentage") |> 
+      select(-percentage),
+    by = join_by(response, year)
+  ) |> 
+  
+  # block of code for calculaing pp change between rounds on types
+  left_join(
+    figure4 |> 
+      rename(
+        type = big_type,
+        response = typ,
+        percentage = prop,
+        percentage_type = prob_big,
+        year = survey 
+      ) |>
+      mutate(
+        response = case_when(
+          response == "Irrelevant" ~ "Marriage is irrelevant",
+          response == "Refusal" ~ "Refusal of marriage",
+          response == "Economic" ~ "Economic reasons",
+          response == "Trial" ~ "Trial marriage",
+          response == "Prelude" ~ "Prelude to marriage",
+          TRUE ~ response
+        )
+      ) |> 
       group_by(type, year) %>%  
       summarise(percentage_type = sum(percentage)) %>% 
       pivot_wider(id_cols = type, names_from = year, values_from = percentage_type) %>% 
@@ -47,34 +107,82 @@ figure4 <- figure4 %>%
       mutate(max_type=max(`2021`, `2005`)) %>%  
       ungroup() %>%  
       
-      pivot_longer(cols  = c(`2021`, `2005`), names_to = "year", values_to = "percentage_type")
-    ,by = join_by("type", "year"))
+      pivot_longer(cols  = c(`2021`, `2005`), names_to = "year", values_to = "percentage_type") |> 
+      select(-percentage_type)
+    ,by = join_by("type", "year")) |> 
+  select(-contains("weight")) |> 
+  arrange(type, response)
+```
 
-figure5 <- read_csv("data/figure5.csv") %>%  
-  select(-any_of("...5")) %>% 
-  drop_na() %>% 
-  group_by(response, age_group) %>%  
-  mutate(max=max(year_2005, year_2021)) %>%  
-  ungroup() %>%  
-  
-  mutate(pp_change = year_2021 - year_2005) %>%  
-  pivot_longer(cols = c(year_2005, year_2021),
-             names_to = "year",
-             values_to = "percentage") %>% 
-  mutate(year = str_extract(year, "\\d{4}"))
+```{r massaging-variables-figure5}
+figure5proper <- figure5 |> 
+  rename(
+    response = typ,
+    percentage = prop,
+    age_group = age4,
+    year = survey 
+  ) |> 
+  select(-contains("weight")) |> 
+  left_join(
+    figure5 |> 
+      rename(
+        response = typ,
+        percentage = prop,
+        age_group = age4,
+        year = survey 
+      ) |> 
+      pivot_wider(id_cols = c(response, age_group),
+                  values_from = percentage,
+                  names_from = year,
+                  names_prefix = "year_") |>
+      group_by(response, age_group) |> 
+      mutate(max = max(year_2021, year_2005)) |> 
+      ungroup() |> 
+      mutate(pp_change = year_2021-year_2005) |> 
+      pivot_longer(cols  = c(year_2021, year_2005), names_to = "year", values_to = "percentage", names_prefix = "year_") |>
+      select(-percentage),
+    by = join_by(response, age_group, year)
+  ) |> 
+  arrange(response, age_group, year)
+```
 
-figure6 <- read_csv("data/figure6.csv") %>%  
-  select(-any_of("...5")) %>% 
-  drop_na() %>% 
-  group_by(response, type) %>%  
-  mutate(max=max(year_2005, year_2021)) %>%  
-  ungroup() %>%  
-  
-  mutate(pp_change = year_2021 - year_2005) %>%  
-  pivot_longer(cols = c(year_2005, year_2021),
-             names_to = "year",
-             values_to = "percentage") %>% 
-  mutate(year = str_extract(year, "\\d{4}"))
+```{r massaging-variables-figure6}
+figure6proper <- figure6 |> 
+  rename(
+    response = typ,
+    percentage = prop,
+    type = edu3,
+    year = survey 
+  ) |> 
+  select(-contains("weight")) |> 
+  left_join(
+    figure6 |> 
+      rename(
+        response = typ,
+        percentage = prop,
+        type = edu3,
+        year = survey 
+      ) |> 
+      pivot_wider(id_cols = c(response, type),
+                  values_from = percentage,
+                  names_from = year,
+                  names_prefix = "year_") |>
+      group_by(response, type) |> 
+      mutate(max = max(year_2021, year_2005)) |> 
+      ungroup() |> 
+      mutate(pp_change = year_2021-year_2005) |> 
+      pivot_longer(cols  = c(year_2021, year_2005), names_to = "year", values_to = "percentage", names_prefix = "year_") |>
+      select(-percentage),
+    by = join_by(response, type, year)
+  ) |> 
+  arrange(response, type, year) |> 
+  mutate(
+    type = case_when(
+      type == "low" ~ "Low",
+      type == "mid" ~ "Medium",
+      type == "high" ~ "High"
+    )
+  )
 ```
 
 ## Theme for figures
