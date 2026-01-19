@@ -221,7 +221,7 @@ update_geom_defaults("label", list(family = "Jost", fontface = "plain"))
 nudge_value=1.5
 
 figure_4 <- 
-  figure4 %>% 
+  figure4proper %>% 
   # reordering levels for plotting
   mutate(type = factor(type, levels = c("Forerunners - most likely getting married",
                                          "Forerunners - possibly getting married",
@@ -271,11 +271,11 @@ figure_4 <-
   geom_text(aes(label=percentage, color=year),
             size=3.25,
             nudge_x=if_else(
-              figure4$percentage==figure4$max, # if it's the larger percentage...
+              figure4proper$percentage==figure4proper$max, # if it's the larger percentage...
               nudge_value,   # move it to the right of the point
               -nudge_value), # otherwise, move it to the left of the point
             hjust=if_else(
-              figure4$percentage==figure4$max, #if it's the larger percentage
+              figure4proper$percentage==figure4proper$max, #if it's the larger percentage
               0, # left justify
               1),# else, right justify      
             ) +
@@ -319,7 +319,7 @@ ggsave(
 nudge_value=1.5
 
 figure4_aggr <- 
-  figure4 %>%  
+  figure4proper %>%  
   group_by(type, year) %>%  
   summarise(pp_change = max(pp_change_type),
             max = max(max_type),
@@ -595,113 +595,6 @@ ggsave(
   plot = figure_6,
   width = 4.9,
   height = 5.7,     # use full height for grid layout
-  units = "in",
-  dpi = 300,
-  bg = "white"
-)
-```
-
-## Failed ideas:
-
-#### Numbers on the side figure4
-
-```{r}
-p_gap <- 
-  
-  # controlling the order of facets
-  figure4 %>% 
-  mutate(type = factor(type, levels = c("Forerunners - most likely getting married",
-                                         "Forerunners - possibly getting married",
-                                         "Alternatives - unlikely to get married"))) %>% 
-  group_by(type, response) %>%  
-  summarise(pp_change = max(pp_change), .groups = "drop") %>%  
-  
-  # basic mapping and aesthetics
-  ggplot(aes(x=pp_change, y=response)) +
-  geom_text(aes(x=0, label=pp_change),
-            fontface="bold",
-            size=3.25) +
-  
-  # facet by type
-  facet_wrap(vars(type), nrow = 3, scales = "free_y") +
-  
-  # add title
-  labs(title = "PP change\n2021-2005") +
-  
-  theme_void() +
-  coord_cartesian(xlim = c(-.05, 0.05)) +
-  theme(
-    plot.margin = margin(l=0, r=0, b=0, t=50),
-    plot.background = element_rect(fill="#EFEFE3", color="#EFEFE3"),
-    legend.position = "none",
-    strip.text = element_blank(),
-    plot.title = element_text(hjust = 0.5, size = 9, face = "bold", margin = margin(b=5))
-  )
-
-p_whole <- 
-  figure_4 + p_gap + plot_layout(design=
-  c(
-    area(l=0,  r=45, t=0, b=1),
-    area(l=46, r=52, t=0, b=1)
-  )) 
-
-p_whole
-
-ggsave(
-  filename = file.path("plots", "figure_4_w_numbers.png"),
-  plot = p_whole,
-  width = 4.9,
-  height = 5.5,     # use closer to max since you have 3 rows
-  units = "in",
-  dpi = 300,
-  bg = "white"
-)
-```
-
-#### Numbers on the side aggregated
-
-```{r}
-p_gap_4a <- 
-  
-  # controlling the order of facets
-  figure4_aggr %>%  
-  mutate(type = factor(type, levels = c("Alternatives - unlikely to get married",
-                                         "Forerunners - possibly getting married",
-                                         "Forerunners - most likely getting married"))) %>% 
-  
-  # basic mapping and aesthetics
-  ggplot(aes(x=pp_change, y=type)) +
-  geom_text(aes(x=0, label=pp_change),
-            fontface="bold",
-            size=3.25) +
-  
-  # add title
-  labs(title = "PP change\n2021-2005") +
-  
-  theme_void() +
-  coord_cartesian(xlim = c(-.05, 0.05)) +
-  theme(
-    plot.margin = margin(l=0, r=0, b=0, t=50),
-    plot.background = element_rect(fill="#EFEFE3", color="#EFEFE3"),
-    legend.position = "none",
-    strip.text = element_blank(),
-    plot.title = element_text(hjust = 0.5, size = 9, face = "bold", margin = margin(b=5))
-  )
-
-p_whole_4a <- 
-  figure_4a + p_gap_4a + plot_layout(design=
-  c(
-    area(l=0,  r=45, t=0, b=1),
-    area(l=46, r=52, t=0, b=1)
-  )) 
-
-p_whole_4a
-
-ggsave(
-  filename = file.path("plots", "figure_4_aggr_w_numbers.png"),
-  plot = p_whole_4a,
-  width = 4.9,
-  height = 3, 
   units = "in",
   dpi = 300,
   bg = "white"
