@@ -440,7 +440,7 @@ ggsave(
 nudge_value=.3
 
 figure_5 <- 
-  figure5 %>%  
+  figure5proper %>%  
   # Reordering the response vars
   mutate(
     response = factor(response,
@@ -481,7 +481,7 @@ figure_5 <-
     force = 0.3,         # repulsion force
     max.iter = 3000,     # more iterations for better placement
     nudge_x = if_else(
-      figure5$year == min(figure5$year), 
+      figure5proper$year == min(figure5proper$year), 
       -0.3, 0.3
     ), show.legend = FALSE) +
   
@@ -521,7 +521,7 @@ ggsave(
 nudge_value=.3
 
 figure_6 <- 
-  figure6 %>%  
+  figure6proper %>%  
   # Reordering the response vars
   mutate(
     response = factor(response,
@@ -565,7 +565,7 @@ figure_6 <-
     force = 0.3,         # repulsion force
     max.iter = 3000,     # more iterations for better placement
     nudge_x = if_else(
-      figure5$year == min(figure5$year), 
+      figure5proper$year == min(figure5proper$year), 
       -0.3, 0.3
     ), show.legend = FALSE) +
   
