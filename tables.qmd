@@ -377,6 +377,72 @@ table4 <- analysis |>
   )
 ```
 
+```{r table 5}
+# the indicators are int3, att, and econ
+
+table5 <- analysis_sample |> 
+  
+  group_by(survey) |> 
+  mutate(total = sum(weight)) |> 
+  ungroup() |> 
+  
+  summarise(
+    total = first(total),
+    partial_total = sum(weight),
+    prop = round(partial_total/total*100),
+    .by = c(int3, survey)
+  ) |> 
+  
+  mutate(value_label = case_when(
+    int3 == 1 ~ "Intend",
+    int3 == 0 ~ "Don't intend"
+  )) |> 
+  select(-contains("total"), -int3)  |> 
+  
+  bind_rows(
+    analysis_sample |> 
+      group_by(survey) |> 
+      mutate(total = sum(weight)) |> 
+      ungroup() |> 
+      
+      summarise(
+        total = first(total),
+        partial_total = sum(weight),
+        prop = round(partial_total/total*100),
+        .by = c(econ, survey)
+      ) |> 
+      
+      mutate(value_label = case_when(
+        econ == 1 ~ "Have trouble",
+        econ == 0 ~ "Don't have trouble"
+      )) |> 
+      select(-contains("total"), -econ) |> 
+      filter(!is.na(value_label))
+  ) |> 
+  
+  bind_rows(
+    analysis_sample |> 
+      group_by(survey) |> 
+      mutate(total = sum(weight)) |> 
+      ungroup() |> 
+      
+      summarise(
+        total = first(total),
+        partial_total = sum(weight),
+        prop = round(partial_total/total*100),
+        .by = c(att, survey)
+      ) |> 
+      
+      mutate(value_label = case_when(
+        att == 1 ~ "Is outdated",
+        att == 2 ~ "Isn't outdated",
+        att == 3 ~ "Neutral"
+      )) |> 
+      select(-contains("total"), -att)
+  )
+```
+
+
 ## Exporting tables
 
 ```{r table 2 export}
@@ -645,5 +711,60 @@ doc <- read_docx() %>%
 
 
 print(doc, target = file.path("tables", "table4.docx"))
+```
+
+```{r table 5 export}
+# Create variable groupings
+df <- table5 %>%
+  mutate(variable = case_when(
+    value_label %in% c("Don't intend", "Intend") ~ "Intention to marry within 3 years",
+    value_label %in% c("Don't have trouble", "Have trouble") ~ "Have trouble making ends meet",
+    value_label %in% c("Isn't outdated", "Neutral", "Is outdated") ~ "Agrees marriage is outdated"
+  ))
+
+# Reshape data for table
+table_data <- df %>%
+  pivot_wider(names_from = survey, values_from = prop) %>%
+  select(variable, value_label, `2005`, `2021`) %>%
+  arrange(variable, value_label)
+
+# Create flextable
+ft <- flextable(table_data) %>%
+  # Set column names
+  set_header_labels(
+    variable = "Variable",
+    value_label = "Response",
+    `2005` = "2005",
+    `2021` = "2021"
+  ) %>%
+  # Merge cells in variable column
+  merge_v(j = "variable") %>%
+  # Format percentages
+  colformat_double(j = c("2005", "2021"), digits = 0, suffix = "%") %>%
+  # Align columns
+  align(j = c("2005", "2021"), align = "center", part = "all") %>%
+  align(j = c("variable", "value_label"), align = "left", part = "all") %>%
+  # Add borders
+  border_remove() %>%
+  hline_top(border = fp_border(width = 2), part = "all") %>%
+  hline_bottom(border = fp_border(width = 2), part = "body") %>%
+  hline(i = c(3, 5), border = fp_border(width = 0.5), part = "body") %>%
+  # Font formatting
+  font(fontname = "Times New Roman", part = "all") %>%
+  fontsize(size = 12, part = "all") %>%
+  # Padding
+  padding(padding = 3, part = "all") %>%
+  # Column widths
+  width(j = "variable", width = 2.5) %>%
+  width(j = "value_label", width = 1.8) %>%
+  width(j = c("2005", "2021"), width = 0.8) %>%
+  # Bold header
+  bold(part = "header")
+
+# Save to Word document
+doc <- read_docx() %>%
+  body_add_flextable(ft)
+
+print(doc, target = file.path("tables", "table5.docx"))
 ```
 
