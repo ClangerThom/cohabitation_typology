@@ -13,6 +13,27 @@ library(haven)
 library(sjmisc)
 ```
 
+```{r}
+# Largest-remainder (Hamilton's) rounding: returns integer percentages that
+# sum to exactly 100, given a vector of proportions. Always renormalises
+# input first, so it works whether the input sums to 1 (typical) or to less
+# (e.g. after dropping NA categories). Tie-breaking on equal remainders
+# falls back to input order — deterministic but not principled. See
+# CHANGELOG 2026-05-04 for the full set of choices behind this helper.
+round_to_100 <- function(p) {
+  if (length(p) == 0) return(integer(0))
+  if (sum(p) == 0)    return(integer(length(p)))
+  scaled  <- p / sum(p) * 100
+  floored <- floor(scaled)
+  short   <- 100L - as.integer(sum(floored))
+  if (short > 0) {
+    bump <- order(scaled - floored, decreasing = TRUE)[seq_len(short)]
+    floored[bump] <- floored[bump] + 1
+  }
+  as.integer(floored)
+}
+```
+
 ## Loading in data
 
 ```{r}
@@ -123,7 +144,14 @@ pilot2tidy <- pilot |>
 ```{r}
 #| message: false
 #| warning: false
-analysis <- add_rows(round1tidy, round2tidy, pilot2tidy, id = "survey_type") |>
+# round1's arid is numeric while round2/pilot's respid is character; cast to a
+# common type so add_rows() doesn't fail. respid is only ever an identifier.
+analysis <- add_rows(
+  round1tidy |> mutate(respid = as.character(respid)),
+  round2tidy |> mutate(respid = as.character(respid)),
+  pilot2tidy |> mutate(respid = as.character(respid)),
+  id = "survey_type"
+) |>
   mutate(
     survey = if_else(survey_type == 1, "2005", "2021"),
     weight = if_else(survey_type == 3, 1, weight)

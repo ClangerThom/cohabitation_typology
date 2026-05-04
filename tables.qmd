@@ -233,43 +233,53 @@ table3 <- analysis |>
   )
 
 table3proper <- table3 |>
-  mutate(prop_type = case_when(
-    !is.na(sex)    ~ sex,
-    !is.na(age4)   ~ age4,
-    !is.na(edu3)   ~ edu3,
-    !is.na(age_sd) ~ "Age SD",
-    TRUE ~ "Mean age"
-  )) |>
+  mutate(
+    variable = case_when(
+      !is.na(sex)      ~ "Sex",
+      !is.na(age4)     ~ "Age",
+      !is.na(edu3)     ~ "Education",
+      !is.na(age_mean) ~ "Age stat",
+      !is.na(age_sd)   ~ "Age stat",
+      TRUE ~ NA_character_
+    ),
+    prop_type = case_when(
+      !is.na(sex)    ~ sex,
+      !is.na(age4)   ~ age4,
+      !is.na(edu3)   ~ edu3,
+      !is.na(age_sd) ~ "Age SD",
+      TRUE ~ "Mean age"
+    )
+  ) |>
   mutate(prop = case_when(
     is.na(prop) & !is.na(age_sd)   ~ age_sd,
     is.na(prop) & !is.na(age_mean) ~ age_mean,
     TRUE ~ prop
   )) |>
   select(-sex, -count, -total_weight, -age4, -edu3, -age_mean, -age_sd) |>
-  mutate(prop = case_when(
-    prop_type == "Age SD" | prop_type == "Mean age" ~ round(prop),
-    prop_type != "unknown" ~ round(prop * 100),
-    round(prop * 100) != 0 ~ round(prop * 100),
-    TRUE ~ round(prop * 100, digits = 1)
+  # Round percentage rows to integers summing to 100 within each
+  # (variable, sample, survey). Age stat rows (Mean / SD) aren't proportions
+  # and just get a simple round. Note: the previous 1-decimal display for
+  # tiny "unknown" education shares is dropped — all four edu categories
+  # now round to integers and sum to 100 together. See CHANGELOG 2026-05-04.
+  group_by(variable, sample, survey) |>
+  mutate(prop = if_else(
+    variable == "Age stat",
+    round(prop),
+    as.numeric(round_to_100(prop))
   )) |>
+  ungroup() |>
   pivot_wider(
-    id_cols = c(prop_type, sample),
+    id_cols = c(prop_type, sample, variable),
     values_from = prop,
     names_from = survey,
     names_prefix = "year_"
-  ) |>
-  mutate(
-    variable = case_when(
-      prop_type %in% c("high", "mid", "low", "unknown") ~ "Education",
-      prop_type %in% c("Male", "Female")                ~ "Sex",
-      prop_type %in% c("Mean age", "Age SD", "18-34", "35-51", "52-69") ~ "Age",
-      TRUE ~ NA
-    )
   ) |>
   arrange(variable, sample)
 ```
 
 ```{r table-4}
+# Round so parstat shares sum to 100 within each (sample × survey).
+# Population groups have 4 categories, Co-residents groups have 2.
 table4 <- analysis |>
   filter(age < 70 & !is.na(parstat)) |>
   group_by(survey) |>
@@ -279,9 +289,12 @@ table4 <- analysis |>
     sample = "Population",
     total = first(total),
     partial_total = sum(weight),
-    prop = round(partial_total / total * 100),
+    prop = partial_total / total,
     .by = c(parstat, survey)
   ) |>
+  group_by(survey) |>
+  mutate(prop = round_to_100(prop)) |>
+  ungroup() |>
   select(-contains("total")) |>
   mutate(parstat = case_match(parstat,
     4 ~ "Single", 3 ~ "LAT", 2 ~ "Married", 1 ~ "Cohabiting"
@@ -296,15 +309,24 @@ table4 <- analysis |>
         sample = "Co-residents",
         total = first(total),
         partial_total = sum(weight),
-        prop = round(partial_total / total * 100),
+        prop = partial_total / total,
         .by = c(parstat, survey)
       ) |>
+      group_by(survey) |>
+      mutate(prop = round_to_100(prop)) |>
+      ungroup() |>
       select(-contains("total")) |>
       mutate(parstat = case_match(parstat, 2 ~ "Married", 1 ~ "Cohabiting"))
   )
 ```
 
 ```{r table-5}
+# Each block rounds within survey so the displayed responses sum to 100.
+# For econ, NAs are dropped first and round_to_100 renormalises the
+# remaining two values — substantive change vs the previous version, which
+# left them summing to ~95% (the missing share was implicitly in the
+# denominator). int3 and att have no NAs in analysis_sample by construction.
+# See CHANGELOG 2026-05-04.
 table5 <- analysis_sample |>
   group_by(survey) |>
   mutate(total = sum(weight)) |>
@@ -312,9 +334,12 @@ table5 <- analysis_sample |>
   summarise(
     total = first(total),
     partial_total = sum(weight),
-    prop = round(partial_total / total * 100),
+    prop = partial_total / total,
     .by = c(int3, survey)
   ) |>
+  group_by(survey) |>
+  mutate(prop = round_to_100(prop)) |>
+  ungroup() |>
   mutate(value_label = case_match(int3, 1 ~ "Intend", 0 ~ "Don't intend")) |>
   select(-contains("total"), -int3) |>
 
@@ -326,14 +351,17 @@ table5 <- analysis_sample |>
       summarise(
         total = first(total),
         partial_total = sum(weight),
-        prop = round(partial_total / total * 100),
+        prop = partial_total / total,
         .by = c(econ, survey)
       ) |>
       mutate(value_label = case_match(econ,
         1 ~ "Have trouble", 0 ~ "Don't have trouble"
       )) |>
-      select(-contains("total"), -econ) |>
-      filter(!is.na(value_label))
+      filter(!is.na(value_label)) |>
+      group_by(survey) |>
+      mutate(prop = round_to_100(prop)) |>
+      ungroup() |>
+      select(-contains("total"), -econ)
   ) |>
 
   bind_rows(
@@ -344,9 +372,12 @@ table5 <- analysis_sample |>
       summarise(
         total = first(total),
         partial_total = sum(weight),
-        prop = round(partial_total / total * 100),
+        prop = partial_total / total,
         .by = c(att, survey)
       ) |>
+      group_by(survey) |>
+      mutate(prop = round_to_100(prop)) |>
+      ungroup() |>
       mutate(value_label = case_match(att,
         1 ~ "Is outdated", 2 ~ "Isn't outdated", 3 ~ "Neutral"
       )) |>

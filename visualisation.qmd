@@ -21,8 +21,25 @@ Transforms the output of `analysis.qmd` into plot-ready data frames, converting
 proportions to percentages and standardising variable names.
 
 ```{r}
-figure4proper <- figure4 |>
-  mutate(across(where(is.numeric), ~round(. * 100))) |>
+# Round percentages with largest-remainder method. typ-level (six categories)
+# and big_type-level (three categories) are rounded INDEPENDENTLY within each
+# survey-year — each chart's labels sum to exactly 100, but rolled-up totals
+# across figures 4 and 4a may differ by ±1pp. See CHANGELOG 2026-05-04.
+figure4_pct <- figure4 |>
+  group_by(survey) |>
+  mutate(prop = round_to_100(prop)) |>
+  ungroup() |>
+  select(-prob_big) |>
+  left_join(
+    figure4 |>
+      distinct(survey, big_type, prob_big) |>
+      group_by(survey) |>
+      mutate(prob_big = round_to_100(prob_big)) |>
+      ungroup(),
+    by = c("survey", "big_type")
+  )
+
+figure4proper <- figure4_pct |>
   select(-contains("weight")) |>
   rename(
     type           = big_type,
@@ -44,8 +61,7 @@ figure4proper <- figure4 |>
   ) |>
   # pp change and max value per response
   left_join(
-    figure4 |>
-      mutate(across(where(is.numeric), ~round(. * 100))) |>
+    figure4_pct |>
       rename(response = typ, percentage = prop, year = survey) |>
       mutate(
         response = case_when(
@@ -70,8 +86,7 @@ figure4proper <- figure4 |>
   ) |>
   # pp change and max value per big type
   left_join(
-    figure4 |>
-      mutate(across(where(is.numeric), ~round(. * 100))) |>
+    figure4_pct |>
       rename(type = big_type, year = survey, percentage_type = prob_big) |>
       group_by(type, year) |>
       summarise(percentage_type = max(percentage_type), .groups = "drop") |>
@@ -89,13 +104,17 @@ figure4proper <- figure4 |>
 ```
 
 ```{r}
-figure5proper <- figure5 |>
-  mutate(across(where(is.numeric), ~round(. * 100))) |>
+# Round so the six typ percentages sum to 100 within each survey-year × age band.
+figure5_pct <- figure5 |>
+  group_by(survey, age4) |>
+  mutate(prop = round_to_100(prop)) |>
+  ungroup()
+
+figure5proper <- figure5_pct |>
   rename(response = typ, percentage = prop, age_group = age4, year = survey) |>
   select(-contains("weight")) |>
   left_join(
-    figure5 |>
-      mutate(across(where(is.numeric), ~round(. * 100))) |>
+    figure5_pct |>
       rename(response = typ, percentage = prop, age_group = age4, year = survey) |>
       pivot_wider(id_cols = c(response, age_group), values_from = percentage,
                   names_from = year, names_prefix = "year_") |>
@@ -112,13 +131,17 @@ figure5proper <- figure5 |>
 ```
 
 ```{r}
-figure6proper <- figure6 |>
-  mutate(across(where(is.numeric), ~round(. * 100))) |>
+# Round so the six typ percentages sum to 100 within each survey-year × education.
+figure6_pct <- figure6 |>
+  group_by(survey, edu3) |>
+  mutate(prop = round_to_100(prop)) |>
+  ungroup()
+
+figure6proper <- figure6_pct |>
   rename(response = typ, percentage = prop, type = edu3, year = survey) |>
   select(-contains("weight")) |>
   left_join(
-    figure6 |>
-      mutate(across(where(is.numeric), ~round(. * 100))) |>
+    figure6_pct |>
       rename(response = typ, percentage = prop, type = edu3, year = survey) |>
       pivot_wider(id_cols = c(response, type), values_from = percentage,
                   names_from = year, names_prefix = "year_") |>
@@ -175,7 +198,7 @@ figure_4 <-
   ggplot(aes(x = percentage, y = response)) +
 
   # arrow shaft
-  geom_segment(data = . |>
+  geom_segment(data = \(d) d |>
                  group_by(type, response) |>
                  arrange(year) |>
                  summarise(x_start = first(percentage),
@@ -186,7 +209,7 @@ figure_4 <-
                color = "#E7E7E7", linewidth = 3.5) +
 
   # arrowhead
-  geom_segment(data = . |>
+  geom_segment(data = \(d) d |>
                  group_by(type, response) |>
                  arrange(year) |>
                  summarise(x_start = first(percentage),
@@ -206,7 +229,7 @@ figure_4 <-
             nudge_x = if_else(figure4proper$percentage == figure4proper$max,  nudge_value, -nudge_value),
             hjust   = if_else(figure4proper$percentage == figure4proper$max,  0, 1)) +
   geom_text(aes(label = year, color = year),
-            data = . |> filter(response == "Prelude to marriage"),
+            data = \(d) d |> filter(response == "Prelude to marriage"),
             nudge_y = .25, fontface = "bold", size = 3.25) +
 
   scale_color_manual(values = c("#436685", "#BF2F24")) +
@@ -245,7 +268,7 @@ figure_4a <-
                                         "Forerunners - possibly getting married",
                                         "Forerunners - most likely getting married"))) |>
   ggplot(aes(x = percentage, y = type)) +
-  geom_segment(data = . |>
+  geom_segment(data = \(d) d |>
                  group_by(type) |>
                  arrange(year) |>
                  summarise(x_start = first(percentage),
@@ -264,10 +287,10 @@ figure_4a <-
             hjust   = if_else(figure4_aggr$percentage == figure4_aggr$max,  0, 1)) +
 
   geom_text(aes(label = year, color = year),
-            data = . |> filter(type == "Forerunners - most likely getting married" & year == 2005),
+            data = \(d) d |> filter(type == "Forerunners - most likely getting married" & year == 2005),
             nudge_y = 0.25, nudge_x =  2, fontface = "bold", size = 3.25) +
   geom_text(aes(label = year, color = year),
-            data = . |> filter(type == "Forerunners - most likely getting married" & year == 2021),
+            data = \(d) d |> filter(type == "Forerunners - most likely getting married" & year == 2021),
             nudge_y = 0.25, nudge_x = -2, fontface = "bold", size = 3.25) +
 
   scale_color_manual(values = c("#436685", "#BF2F24")) +
