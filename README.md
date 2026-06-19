@@ -83,9 +83,9 @@ documents how these source variables are recoded into the analysis variables
 ## 3. Computational requirements
 
 - **R** version **4.6.0** (the version used for the published results).
-- **R packages:** pinned in `renv.lock` (116 packages; key ones: tidyverse
-  2.0.0, dplyr 1.2.1, haven 2.5.5, sjmisc 2.8.11, janitor, patchwork,
-  ggrepel 0.9.8, flextable 0.9.11, officer, knitr 1.51).
+- **R packages:** pinned in `renv.lock` (115 packages; key ones: tidyverse
+  2.0.0, dplyr 1.2.1, haven 2.5.5, sjmisc 2.8.11, janitor, ggrepel 0.9.8,
+  flextable 0.9.11, officer, knitr 1.51).
 
 To recreate the exact package environment:
 

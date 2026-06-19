@@ -37,7 +37,8 @@ round_to_100 <- function(p) {
 ## Loading in data
 
 ```{r}
-# insert your own file names for the datasets here
+# Expects the three GGP/GGS Stata files under data/ggp/ with these exact
+# names — see README §2 "Data availability" for which dataset is which.
 round1 <- read_dta(file.path("data", "ggp", "round1.dta"))
 round2 <- read_dta(file.path("data", "ggp", "round2.dta"))
 pilot <- read_dta(file.path("data", "ggp", "pilot.dta"))
