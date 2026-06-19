@@ -8,3 +8,7 @@
 plots/
 data/
 tables/
+
+# build artefacts
+.reproai/
+dist/

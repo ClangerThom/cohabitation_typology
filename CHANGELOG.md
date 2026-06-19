@@ -1,6 +1,58 @@
 # Changelog
 
-## 2026-05-04 — Rounded percentages now sum to 100
+> **Note (replication package).** Earlier entries below refer to
+> `visualisation.qmd`, the Jost-font figure script. That non-canonical variant
+> was removed when this repository was packaged for deposit, in favour of
+> `figures.qmd` (Arial, no proprietary fonts; formerly
+> `visualisation_journal.qmd`), which is the article's figure source. The
+> figure code and the `round_to_100()` rounding logic described for
+> `visualisation.qmd` apply identically to `figures.qmd`.
+
+## 2026-06-19 — Align outputs with the final article (renumbering + Table A2/A3 fixes)
+
+Renumbered/renamed exhibits to match the published article and fixed two tables
+whose script output diverged from the published versions (the article had been
+manually post-edited). Values are unchanged throughout — these are naming,
+labelling, ordering, display, and one restored row.
+
+### Exhibit renumbering (output filenames)
+
+- `figure_4a` → **`Figure_1.png`** (broad cohabitation groups),
+  `figure_4` → **`Figure_2.png`** (disaggregated types),
+  `figure_5` → **`Figure_3.png`** (by generation),
+  `figure_6` → **`Figure_4.png`** (by education).
+- The combined Figure 4 + 4a panel (`figure_4complete.png`) is not in the
+  article and is **no longer produced**; `library(patchwork)` removed.
+- The figure script `visualisation_journal.qmd` was renamed to **`figures.qmd`**,
+  and its figure output flattened from `plots/journal/` to **`plots/`** (the
+  `journal` subfolder only distinguished the now-removed Jost variant).
+- `table4` → **`Table_2.docx`** (main text), `table2` → **`Table_A1.docx`**,
+  `table3` → **`Table_A2.docx`**, `table5` → **`Table_A3.docx`**.
+  (R object names are unchanged; only the saved filenames changed.)
+
+### Table A3 (`table5`) — formatting
+
+- Response labels changed to **Yes / No / Neutral** (was "Intend/Don't intend",
+  "Have trouble/Don't have trouble", "Is/Isn't outdated/Neutral"). The variable
+  label is now assigned per block instead of inferred from the response text.
+- Responses ordered **Yes → No → Neutral** (value_label made an ordered factor).
+- Restored the trailing **`%`**: `colformat_double(suffix = "%")` silently skips
+  integer columns, and `round_to_100()` returns integers — the `2005`/`2021`
+  columns are now cast to double so the suffix renders.
+
+### Table A2 (`table3`) — restored row + unknown-education display
+
+- **Mean (SD) age row restored.** It was computed (`variable == "Age stat"`) but
+  dropped by the export, which only kept Sex/Age/Education rows. It is now
+  inserted at the top of the Age block (e.g. `41 (15)`).
+- **"Unknown" education one-decimal fallback re-introduced.** When the unknown
+  share rounds to 0% it is now shown to one decimal (e.g. `0.4 %` in 2021) so it
+  doesn't disappear; low/mid/high keep their integer rounding and sum to 100.
+  **This supersedes the 2026-05-04 decision below** ("unknown rounds as an
+  integer with the other three categories, no 0.X display"), which described the
+  pre-edit script and did not match the published table.
+
+
 
 Replaced independent `round(. * 100)` calls in figures and tables with a
 shared `round_to_100()` helper applied within each grouping that should sum

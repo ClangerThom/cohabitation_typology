@@ -1,5 +1,5 @@
 ---
-title: "visualisation_journal"
+title: "figures"
 format: html
 editor: source
 ---
@@ -10,10 +10,9 @@ editor: source
 #| message: false
 library(tidyverse)
 library(janitor)
-library(patchwork)
 library(ggrepel)
 
-dir.create(file.path("plots", "journal"), showWarnings = FALSE)
+dir.create("plots", showWarnings = FALSE)
 ```
 
 ## Preparing data for figures
@@ -240,7 +239,7 @@ figure_4 <-
 figure_4
 
 ggsave(
-  filename = file.path("plots", "journal", "figure_4.png"),
+  filename = file.path("plots", "Figure_2.png"),
   plot = figure_4,
   width = 4.9, height = 5.5, units = "in", dpi = 300, bg = "white"
 )
@@ -303,23 +302,9 @@ figure_4a <-
 figure_4a
 
 ggsave(
-  filename = file.path("plots", "journal", "figure_4a.png"),
+  filename = file.path("plots", "Figure_1.png"),
   plot = figure_4a,
   width = 4.9, height = 3, units = "in", dpi = 300, bg = "white"
-)
-```
-
-#### Combined plot
-
-```{r}
-figure_4complete_plot <-
-  figure_4 + figure_4a +
-  plot_layout(ncol = 1, heights = c(5.5, 3))
-
-ggsave(
-  filename = file.path("plots", "journal", "figure_4complete.png"),
-  plot = figure_4complete_plot,
-  width = 4.9, height = 8.5, units = "in", dpi = 300, bg = "white"
 )
 ```
 
@@ -363,7 +348,7 @@ figure_5 <-
 figure_5
 
 ggsave(
-  filename = file.path("plots", "journal", "figure_5.png"),
+  filename = file.path("plots", "Figure_3.png"),
   plot = figure_5,
   width = 4.9, height = 5.7, units = "in", dpi = 300, bg = "white"
 )
@@ -412,7 +397,7 @@ figure_6 <-
 figure_6
 
 ggsave(
-  filename = file.path("plots", "journal", "figure_6.png"),
+  filename = file.path("plots", "Figure_4.png"),
   plot = figure_6,
   width = 4.9, height = 5.7, units = "in", dpi = 300, bg = "white"
 )

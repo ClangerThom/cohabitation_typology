@@ -262,12 +262,23 @@ table3proper <- table3 |>
   # tiny "unknown" education shares is dropped — all four edu categories
   # now round to integers and sum to 100 together. See CHANGELOG 2026-05-04.
   group_by(variable, sample, survey) |>
-  mutate(prop = if_else(
-    variable == "Age stat",
-    round(prop),
-    as.numeric(round_to_100(prop))
-  )) |>
+  mutate(
+    prop_int = if_else(
+      variable == "Age stat",
+      round(prop),
+      as.numeric(round_to_100(prop))
+    ),
+    # "unknown" education shares that round to 0 are shown to one decimal so
+    # they don't visually disappear (e.g. 0.4% in 2021); low/mid/high keep
+    # their integer rounding and sum to 100. See CHANGELOG 2026-06-19.
+    prop = if_else(
+      prop_type == "unknown" & prop_int == 0,
+      round(prop * 100, 1),
+      prop_int
+    )
+  ) |>
   ungroup() |>
+  select(-prop_int) |>
   pivot_wider(
     id_cols = c(prop_type, sample, variable),
     values_from = prop,
@@ -340,7 +351,10 @@ table5 <- analysis_sample |>
   group_by(survey) |>
   mutate(prop = round_to_100(prop)) |>
   ungroup() |>
-  mutate(value_label = case_match(int3, 1 ~ "Intend", 0 ~ "Don't intend")) |>
+  mutate(
+    variable = "Intention to marry within 3 years",
+    value_label = case_match(int3, 1 ~ "Yes", 0 ~ "No")
+  ) |>
   select(-contains("total"), -int3) |>
 
   bind_rows(
@@ -354,9 +368,10 @@ table5 <- analysis_sample |>
         prop = partial_total / total,
         .by = c(econ, survey)
       ) |>
-      mutate(value_label = case_match(econ,
-        1 ~ "Have trouble", 0 ~ "Don't have trouble"
-      )) |>
+      mutate(
+        variable = "Have trouble making ends meet",
+        value_label = case_match(econ, 1 ~ "Yes", 0 ~ "No")
+      ) |>
       filter(!is.na(value_label)) |>
       group_by(survey) |>
       mutate(prop = round_to_100(prop)) |>
@@ -378,9 +393,10 @@ table5 <- analysis_sample |>
       group_by(survey) |>
       mutate(prop = round_to_100(prop)) |>
       ungroup() |>
-      mutate(value_label = case_match(att,
-        1 ~ "Is outdated", 2 ~ "Isn't outdated", 3 ~ "Neutral"
-      )) |>
+      mutate(
+        variable = "Agrees marriage is outdated",
+        value_label = case_match(att, 1 ~ "Yes", 2 ~ "No", 3 ~ "Neutral")
+      ) |>
       select(-contains("total"), -att)
   )
 ```
@@ -410,7 +426,7 @@ ft <- flextable(table2) |>
   fontsize(size = 10, part = "all")
 
 doc <- read_docx() |> body_add_flextable(ft)
-print(doc, target = file.path("tables", "table2.docx"))
+print(doc, target = file.path("tables", "Table_A1.docx"))
 ```
 
 ```{r table-3-export}
@@ -481,6 +497,7 @@ df_formatted <- df_with_sd |>
   filter(prop_type != "Age SD")
 
 sex_rows       <- df_formatted |> filter(variable == "Sex")       |> select(-variable, -starts_with("sd_"))
+agestat_rows   <- df_formatted |> filter(variable == "Age stat")  |> select(-variable, -starts_with("sd_"))
 age_rows       <- df_formatted |> filter(variable == "Age")       |> select(-variable, -starts_with("sd_"))
 education_rows <- df_formatted |> filter(variable == "Education") |> select(-variable, -starts_with("sd_"))
 
@@ -503,7 +520,7 @@ total_row <- data.frame(
 
 df_final <- bind_rows(
   make_header_row("Sex"),       sex_rows,
-  make_header_row("Age"),       age_rows,
+  make_header_row("Age"),       agestat_rows, age_rows,
   make_header_row("Education"), education_rows,
   total_row
 )
@@ -535,7 +552,7 @@ ft <- flextable(df_final) |>
   padding(padding = 3, part = "all")
 
 doc <- read_docx() |> body_add_flextable(ft)
-print(doc, target = file.path("tables", "table3.docx"))
+print(doc, target = file.path("tables", "Table_A2.docx"))
 ```
 
 ```{r table-4-export}
@@ -597,21 +614,18 @@ ft <- flextable(df_final) |>
   padding(padding = 3, part = "all")
 
 doc <- read_docx() |> body_add_flextable(ft)
-print(doc, target = file.path("tables", "table4.docx"))
+print(doc, target = file.path("tables", "Table_2.docx"))
 ```
 
 ```{r table-5-export}
-df <- table5 |>
-  mutate(variable = case_when(
-    value_label %in% c("Don't intend", "Intend")               ~ "Intention to marry within 3 years",
-    value_label %in% c("Don't have trouble", "Have trouble")   ~ "Have trouble making ends meet",
-    value_label %in% c("Isn't outdated", "Neutral", "Is outdated") ~ "Agrees marriage is outdated"
-  ))
-
-table_data <- df |>
+table_data <- table5 |>
+  mutate(value_label = factor(value_label, levels = c("Yes", "No", "Neutral"))) |>
   pivot_wider(names_from = survey, values_from = prop) |>
   select(variable, value_label, `2005`, `2021`) |>
-  arrange(variable, value_label)
+  arrange(variable, value_label) |>
+  # cast to double so colformat_double's "%" suffix applies (round_to_100
+  # returns integers, which colformat_double silently skips)
+  mutate(across(c(`2005`, `2021`), as.double))
 
 ft <- flextable(table_data) |>
   set_header_labels(variable = "Variable", value_label = "Response",
@@ -633,5 +647,5 @@ ft <- flextable(table_data) |>
   bold(part = "header")
 
 doc <- read_docx() |> body_add_flextable(ft)
-print(doc, target = file.path("tables", "table5.docx"))
+print(doc, target = file.path("tables", "Table_A3.docx"))
 ```
